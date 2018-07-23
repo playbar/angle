@@ -17,7 +17,7 @@
         'angle_build_winrt%': '<(angle_build_winrt)',
 
         'deqp_path': '<(DEPTH)/third_party/deqp/src',
-        'libpng_path': '<(DEPTH)/third_party/libpng',
+        'libpng_path': '<(DEPTH)/third_party/libpng/src',
         'zlib_path': '<(DEPTH)/third_party/zlib',
 
         'angle_build_deqp_libraries%' : 0,
@@ -108,8 +108,6 @@
             '<(deqp_path)/modules/gles31/stress',
             '<(deqp_path)/modules/glshared',
             '<(deqp_path)/modules/glusecases',
-            '<(libpng_path)',
-            '<(zlib_path)',
         ],
         'deqp_gles2_sources':
         [
@@ -229,6 +227,7 @@
             '<(deqp_path)/modules/gles2/functional/es2fShaderInvarianceTests.hpp',
             '<(deqp_path)/modules/gles2/functional/es2fShaderLoopTests.cpp',
             '<(deqp_path)/modules/gles2/functional/es2fShaderLoopTests.hpp',
+            '<(deqp_path)/modules/gles2/functional/es2fShaderMatrixTests.cpp',
             '<(deqp_path)/modules/gles2/functional/es2fShaderMatrixTests.hpp',
             '<(deqp_path)/modules/gles2/functional/es2fShaderOperatorTests.cpp',
             '<(deqp_path)/modules/gles2/functional/es2fShaderOperatorTests.hpp',
@@ -323,10 +322,6 @@
             '<(deqp_path)/modules/gles2/tes2TestPackage.cpp',
             '<(deqp_path)/modules/gles2/tes2TestPackage.hpp',
             '<(deqp_path)/modules/gles2/tes2TestPackageEntry.cpp',
-            # TODO(geofflang): Remove this once the test is updated in dEQP or the VC++2017
-            # compiler is fixed (crbug.com/759402)
-            #'<(deqp_path)/modules/gles2/functional/es2fShaderMatrixTests.cpp',
-            '<(angle_path)/src/tests/deqp_support/es2fShaderMatrixTests.cpp',
         ],
         'deqp_gles3_sources':
         [
@@ -430,6 +425,8 @@
             '<(deqp_path)/modules/gles3/functional/es3fLifetimeTests.hpp',
             '<(deqp_path)/modules/gles3/functional/es3fMultisampleTests.cpp',
             '<(deqp_path)/modules/gles3/functional/es3fMultisampleTests.hpp',
+            '<(deqp_path)/modules/gles3/functional/es3fMultiviewTests.cpp',
+            '<(deqp_path)/modules/gles3/functional/es3fMultiviewTests.hpp',
             '<(deqp_path)/modules/gles3/functional/es3fNegativeBufferApiTests.cpp',
             '<(deqp_path)/modules/gles3/functional/es3fNegativeBufferApiTests.hpp',
             '<(deqp_path)/modules/gles3/functional/es3fNegativeFragmentApiTests.cpp',
@@ -490,6 +487,8 @@
             '<(deqp_path)/modules/gles3/functional/es3fShaderInvarianceTests.hpp',
             '<(deqp_path)/modules/gles3/functional/es3fShaderLoopTests.cpp',
             '<(deqp_path)/modules/gles3/functional/es3fShaderLoopTests.hpp',
+            '<(deqp_path)/modules/gles3/functional/es3fShaderMetamorphicTests.cpp',
+            '<(deqp_path)/modules/gles3/functional/es3fShaderMetamorphicTests.hpp',
             '<(deqp_path)/modules/gles3/functional/es3fShaderMatrixTests.cpp',
             '<(deqp_path)/modules/gles3/functional/es3fShaderMatrixTests.hpp',
             '<(deqp_path)/modules/gles3/functional/es3fShaderOperatorTests.cpp',
@@ -632,12 +631,16 @@
             '<(deqp_path)/modules/gles31/functional/es31fDefaultVertexArrayObjectTests.hpp',
             '<(deqp_path)/modules/gles31/functional/es31fDrawBuffersIndexedTests.cpp',
             '<(deqp_path)/modules/gles31/functional/es31fDrawBuffersIndexedTests.hpp',
+            '<(deqp_path)/modules/gles31/functional/es31fDrawElementsBaseVertexTests.cpp',
+            '<(deqp_path)/modules/gles31/functional/es31fDrawElementsBaseVertexTests.hpp',
             '<(deqp_path)/modules/gles31/functional/es31fDrawTests.cpp',
             '<(deqp_path)/modules/gles31/functional/es31fDrawTests.hpp',
             '<(deqp_path)/modules/gles31/functional/es31fFboColorbufferTests.cpp',
             '<(deqp_path)/modules/gles31/functional/es31fFboColorbufferTests.hpp',
             '<(deqp_path)/modules/gles31/functional/es31fFboNoAttachmentTests.cpp',
             '<(deqp_path)/modules/gles31/functional/es31fFboNoAttachmentTests.hpp',
+            '<(deqp_path)/modules/gles31/functional/es31fFboSRGBWriteControlTests.cpp',
+            '<(deqp_path)/modules/gles31/functional/es31fFboSRGBWriteControlTests.hpp',
             '<(deqp_path)/modules/gles31/functional/es31fFboTestCase.cpp',
             '<(deqp_path)/modules/gles31/functional/es31fFboTestCase.hpp',
             '<(deqp_path)/modules/gles31/functional/es31fFboTestUtil.cpp',
@@ -670,22 +673,34 @@
             '<(deqp_path)/modules/gles31/functional/es31fNegativeAtomicCounterTests.hpp',
             '<(deqp_path)/modules/gles31/functional/es31fNegativeBufferApiTests.cpp',
             '<(deqp_path)/modules/gles31/functional/es31fNegativeBufferApiTests.hpp',
+            '<(deqp_path)/modules/gles31/functional/es31fNegativeComputeTests.cpp',
+            '<(deqp_path)/modules/gles31/functional/es31fNegativeComputeTests.hpp',
             '<(deqp_path)/modules/gles31/functional/es31fNegativeFragmentApiTests.cpp',
             '<(deqp_path)/modules/gles31/functional/es31fNegativeFragmentApiTests.hpp',
             '<(deqp_path)/modules/gles31/functional/es31fNegativePreciseTests.cpp',
             '<(deqp_path)/modules/gles31/functional/es31fNegativePreciseTests.hpp',
+            '<(deqp_path)/modules/gles31/functional/es31fNegativeSampleVariablesTests.cpp',
+            '<(deqp_path)/modules/gles31/functional/es31fNegativeSampleVariablesTests.hpp',
             '<(deqp_path)/modules/gles31/functional/es31fNegativeShaderApiTests.cpp',
             '<(deqp_path)/modules/gles31/functional/es31fNegativeShaderApiTests.hpp',
             '<(deqp_path)/modules/gles31/functional/es31fNegativeShaderDirectiveTests.cpp',
             '<(deqp_path)/modules/gles31/functional/es31fNegativeShaderDirectiveTests.hpp',
+            '<(deqp_path)/modules/gles31/functional/es31fNegativeShaderFramebufferFetchTests.cpp',
+            '<(deqp_path)/modules/gles31/functional/es31fNegativeShaderFramebufferFetchTests.hpp',
             '<(deqp_path)/modules/gles31/functional/es31fNegativeShaderFunctionTests.cpp',
             '<(deqp_path)/modules/gles31/functional/es31fNegativeShaderFunctionTests.hpp',
             '<(deqp_path)/modules/gles31/functional/es31fNegativeShaderImageLoadStoreTests.cpp',
             '<(deqp_path)/modules/gles31/functional/es31fNegativeShaderImageLoadStoreTests.hpp',
+            '<(deqp_path)/modules/gles31/functional/es31fNegativeShaderStorageTests.cpp',
+            '<(deqp_path)/modules/gles31/functional/es31fNegativeShaderStorageTests.hpp',
+            '<(deqp_path)/modules/gles31/functional/es31fNegativeSSBOBlockTests.cpp',
+            '<(deqp_path)/modules/gles31/functional/es31fNegativeSSBOBlockTests.hpp',
             '<(deqp_path)/modules/gles31/functional/es31fNegativeStateApiTests.cpp',
             '<(deqp_path)/modules/gles31/functional/es31fNegativeStateApiTests.hpp',
             '<(deqp_path)/modules/gles31/functional/es31fNegativeTestShared.cpp',
             '<(deqp_path)/modules/gles31/functional/es31fNegativeTestShared.hpp',
+            '<(deqp_path)/modules/gles31/functional/es31fNegativeTessellationTests.cpp',
+            '<(deqp_path)/modules/gles31/functional/es31fNegativeTessellationTests.hpp',
             '<(deqp_path)/modules/gles31/functional/es31fNegativeTextureApiTests.cpp',
             '<(deqp_path)/modules/gles31/functional/es31fNegativeTextureApiTests.hpp',
             '<(deqp_path)/modules/gles31/functional/es31fNegativeVertexArrayApiTests.cpp',
@@ -708,6 +723,8 @@
             '<(deqp_path)/modules/gles31/functional/es31fProgramStateQueryTests.hpp',
             '<(deqp_path)/modules/gles31/functional/es31fProgramUniformTests.cpp',
             '<(deqp_path)/modules/gles31/functional/es31fProgramUniformTests.hpp',
+            '<(deqp_path)/modules/gles31/functional/es31fSRGBDecodeTests.cpp',
+            '<(deqp_path)/modules/gles31/functional/es31fSRGBDecodeTests.hpp',
             '<(deqp_path)/modules/gles31/functional/es31fSSBOArrayLengthTests.cpp',
             '<(deqp_path)/modules/gles31/functional/es31fSSBOArrayLengthTests.hpp',
             '<(deqp_path)/modules/gles31/functional/es31fSSBOLayoutCase.cpp',
@@ -728,6 +745,8 @@
             '<(deqp_path)/modules/gles31/functional/es31fShaderBuiltinConstantTests.hpp',
             '<(deqp_path)/modules/gles31/functional/es31fShaderCommonFunctionTests.cpp',
             '<(deqp_path)/modules/gles31/functional/es31fShaderCommonFunctionTests.hpp',
+            '<(deqp_path)/modules/gles31/functional/es31fShaderFramebufferFetchTests.cpp',
+            '<(deqp_path)/modules/gles31/functional/es31fShaderFramebufferFetchTests.hpp',
             '<(deqp_path)/modules/gles31/functional/es31fShaderHelperInvocationTests.cpp',
             '<(deqp_path)/modules/gles31/functional/es31fShaderHelperInvocationTests.hpp',
             '<(deqp_path)/modules/gles31/functional/es31fShaderImageLoadStoreTests.cpp',
@@ -746,6 +765,8 @@
             '<(deqp_path)/modules/gles31/functional/es31fShaderStateQueryTests.hpp',
             '<(deqp_path)/modules/gles31/functional/es31fShaderTextureSizeTests.cpp',
             '<(deqp_path)/modules/gles31/functional/es31fShaderTextureSizeTests.hpp',
+            '<(deqp_path)/modules/gles31/functional/es31fShaderUniformIntegerFunctionTests.cpp',
+            '<(deqp_path)/modules/gles31/functional/es31fShaderUniformIntegerFunctionTests.hpp',
             '<(deqp_path)/modules/gles31/functional/es31fStencilTexturingTests.cpp',
             '<(deqp_path)/modules/gles31/functional/es31fStencilTexturingTests.hpp',
             '<(deqp_path)/modules/gles31/functional/es31fSynchronizationTests.cpp',
@@ -824,6 +845,8 @@
             '<(deqp_path)/modules/egl/teglCreateContextTests.hpp',
             '<(deqp_path)/modules/egl/teglCreateSurfaceTests.cpp',
             '<(deqp_path)/modules/egl/teglCreateSurfaceTests.hpp',
+            '<(deqp_path)/modules/egl/teglGetFrameTimestampsTests.cpp',
+            '<(deqp_path)/modules/egl/teglGetFrameTimestampsTests.hpp',
             '<(deqp_path)/modules/egl/teglGetProcAddressTests.cpp',
             '<(deqp_path)/modules/egl/teglGetProcAddressTests.hpp',
             '<(deqp_path)/modules/egl/teglGLES1RenderUtil.cpp',
@@ -878,6 +901,8 @@
             '<(deqp_path)/modules/egl/teglRenderTests.hpp',
             '<(deqp_path)/modules/egl/teglResizeTests.cpp',
             '<(deqp_path)/modules/egl/teglResizeTests.hpp',
+            '<(deqp_path)/modules/egl/teglRobustnessTests.cpp',
+            '<(deqp_path)/modules/egl/teglRobustnessTests.hpp',
             '<(deqp_path)/modules/egl/teglSimpleConfigCase.cpp',
             '<(deqp_path)/modules/egl/teglSimpleConfigCase.hpp',
             '<(deqp_path)/modules/egl/teglSurfacelessContextTests.cpp',
@@ -897,6 +922,8 @@
             '<(deqp_path)/modules/egl/teglThreadCleanUpTests.hpp',
             '<(deqp_path)/modules/egl/teglVGRenderUtil.cpp',
             '<(deqp_path)/modules/egl/teglVGRenderUtil.hpp',
+            '<(deqp_path)/modules/egl/teglWideColorTests.cpp',
+            '<(deqp_path)/modules/egl/teglWideColorTests.hpp',
         ],
         'deqp_libtester_decpp_sources':
         [
@@ -1035,14 +1062,19 @@
             '<(deqp_path)/framework/egl/egluGLContextFactory.cpp',
             '<(deqp_path)/framework/egl/egluGLFunctionLoader.cpp',
             '<(deqp_path)/framework/egl/egluGLUtil.cpp',
-            '<(deqp_path)/framework/egl/egluNativeDisplay.cpp',
+            # TODO(jmadill): Remove override when upstreamed. http://anglebug.com/2564
+            #'<(deqp_path)/framework/egl/egluNativeDisplay.cpp',
+            '<(angle_path)/src/tests/deqp_support/egluNativeDisplay_override.cpp',
+            '<(angle_path)/src/tests/deqp_support/egluNativeDisplay_override.hpp',
             '<(deqp_path)/framework/egl/egluNativePixmap.cpp',
             '<(deqp_path)/framework/egl/egluNativeWindow.cpp',
             '<(deqp_path)/framework/egl/egluPlatform.cpp',
             '<(deqp_path)/framework/egl/egluStaticESLibrary.cpp',
             '<(deqp_path)/framework/egl/egluStrUtil.cpp',
             '<(deqp_path)/framework/egl/egluUnique.cpp',
-            '<(deqp_path)/framework/egl/egluUtil.cpp',
+            # TODO(jmadill): Remove override when upstreamed. http://anglebug.com/2564
+            #'<(deqp_path)/framework/egl/egluUtil.cpp',
+            '<(angle_path)/src/tests/deqp_support/egluUtil_override.cpp',
             '<(deqp_path)/framework/egl/wrapper/eglwDefs.cpp',
             '<(deqp_path)/framework/egl/wrapper/eglwFunctions.cpp',
             '<(deqp_path)/framework/egl/wrapper/eglwLibrary.cpp',
@@ -1052,7 +1084,6 @@
             '<(deqp_path)/framework/opengl/gluDefs.cpp',
             '<(deqp_path)/framework/opengl/gluDrawUtil.cpp',
             '<(deqp_path)/framework/opengl/gluDummyRenderContext.cpp',
-            '<(deqp_path)/framework/opengl/gluES3PlusWrapperContext.cpp',
             '<(deqp_path)/framework/opengl/gluFboRenderContext.cpp',
             '<(deqp_path)/framework/opengl/gluObjectWrapper.cpp',
             '<(deqp_path)/framework/opengl/gluPixelTransfer.cpp',
@@ -1090,8 +1121,7 @@
             '<(deqp_path)/framework/qphelper/qpCrashHandler.c',
             '<(deqp_path)/framework/qphelper/qpDebugOut.c',
             '<(deqp_path)/framework/qphelper/qpInfo.c',
-            # TODO(jmadill): Restore this when we upstream the change.
-            #'<(deqp_path)/framework/qphelper/qpTestLog.c',
+            '<(deqp_path)/framework/qphelper/qpTestLog.c',
             '<(deqp_path)/framework/qphelper/qpWatchDog.c',
             '<(deqp_path)/framework/qphelper/qpXmlWriter.c',
             '<(deqp_path)/framework/randomshaders/rsgBinaryOps.cpp',
@@ -1160,8 +1190,6 @@
             '<(deqp_path)/modules/glshared/glsTextureTestUtil.cpp',
             '<(deqp_path)/modules/glshared/glsUniformBlockCase.cpp',
             '<(deqp_path)/modules/glshared/glsVertexArrayTests.cpp',
-            # TODO(jmadill): Remove this when we upstream the change.
-            '<(angle_path)/src/tests/deqp_support/qpTestLog.c',
             '<(angle_path)/src/tests/deqp_support/tcuANGLENativeDisplayFactory.cpp',
             '<(angle_path)/src/tests/deqp_support/tcuANGLENativeDisplayFactory.h',
             # TODO(jmadill): integrate with dEQP
@@ -1196,6 +1224,11 @@
             'third_party/gpu_test_expectations/gpu_test_config.h',
             'third_party/gpu_test_expectations/gpu_test_expectations_parser.cc',
             'third_party/gpu_test_expectations/gpu_test_expectations_parser.h',
+        ],
+        'deqp_gpu_test_expectations_sources_mac':
+        [
+            'third_party/gpu_test_expectations/gpu_test_config_mac.mm',
+            'third_party/gpu_test_expectations/gpu_test_config_mac.h',
         ],
         'conditions':
         [
@@ -1465,7 +1498,12 @@
                             '-fno-exceptions',
                             '-fno-rtti',
                         ],
-                        'include_dirs': ['<@(deqp_include_dirs)'],
+                        'include_dirs':
+                        [
+                            '<@(deqp_include_dirs)',
+                            '<(libpng_path)',
+                            '<(zlib_path)',
+                        ],
                         'defines': ['<@(deqp_defines)'],
                         'defines!': [ '<@(deqp_undefines)' ],
                         'msvs_settings':
@@ -1631,12 +1669,6 @@
                         'deqp_support/angle_deqp_libtester_main.cpp',
                         'deqp_support/tcuANGLEPlatform.cpp',
                         'deqp_support/tcuANGLEPlatform.h',
-                    ],
-                    # TODO(geofflang): Remove once es2fShaderMatrixTests.cpp no longer requires
-                    # a local copy (crbug.com/759402)
-                    'include_dirs':
-                    [
-                        '<(deqp_path)/modules/gles2/functional',
                     ],
                 },
 
@@ -1851,8 +1883,7 @@
                             {
                                 'sources':
                                 [
-                                    'third_party/gpu_test_expectations/gpu_test_config_mac.h',
-                                    'third_party/gpu_test_expectations/gpu_test_config_mac.mm',
+                                    '<@(deqp_gpu_test_expectations_sources_mac)',
                                 ],
                             }],
                         ],

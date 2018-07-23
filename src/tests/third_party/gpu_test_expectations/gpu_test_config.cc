@@ -78,8 +78,7 @@ GPUTestConfig::OS GetCurrentOS() {
   int32_t major_version = 0;
   int32_t minor_version = 0;
   int32_t bugfix_version = 0;
-  base::SysInfo::OperatingSystemVersionNumbers(
-      &major_version, &minor_version, &bugfix_version);
+  angle::GetOperatingSystemVersionNumbers(&major_version, &minor_version, &bugfix_version);
   if (major_version == 10) {
     switch (minor_version) {
       case 5:
@@ -98,6 +97,8 @@ GPUTestConfig::OS GetCurrentOS() {
         return GPUTestConfig::kOsMacElCapitan;
       case 12:
         return GPUTestConfig::kOsMacSierra;
+      case 13:
+        return GPUTestConfig::kOsMacHighSierra;
     }
   }
 #elif defined(OS_ANDROID)
@@ -162,7 +163,7 @@ void GPUTestConfig::set_build_type(int32_t build_type) {
 }
 
 void GPUTestConfig::set_api(int32_t api) {
-  DCHECK_EQ(0, api & ~(kAPID3D9 | kAPID3D11 | kAPIGLDesktop | kAPIGLES));
+  DCHECK_EQ(0, api & ~(kAPID3D9 | kAPID3D11 | kAPIGLDesktop | kAPIGLES | kAPIVulkan));
   api_ = api;
 }
 
@@ -200,6 +201,8 @@ bool GPUTestConfig::OverlapsWith(const GPUTestConfig& config) const {
       build_type_ != kBuildTypeUnknown &&
       (build_type_ & config.build_type_) == 0)
     return false;
+  if (config.api() != kAPIUnknown && api_ != kAPIUnknown && api_ != config.api_)
+      return false;
   return true;
 }
 
@@ -244,6 +247,7 @@ bool GPUTestBotConfig::IsValid() const {
     case kOsMacYosemite:
     case kOsMacElCapitan:
     case kOsMacSierra:
+    case kOsMacHighSierra:
     case kOsLinux:
     case kOsChromeOS:
     case kOsAndroid:
@@ -275,7 +279,7 @@ bool GPUTestBotConfig::Matches(const GPUTestConfig& config) const {
   if (config.gpu_vendor().size() > 0) {
     bool contained = false;
     for (size_t i = 0; i < config.gpu_vendor().size(); ++i) {
-      if (config.gpu_vendor()[i] == gpu_vendor()[0]) {
+      if (!gpu_vendor().empty() && config.gpu_vendor()[i] == gpu_vendor()[0]) {
         contained = true;
         break;
       }

@@ -52,9 +52,9 @@ class Sync final : public RefCountObject, public LabeledObject
 {
   public:
     Sync(rx::SyncImpl *impl, GLuint id);
-    virtual ~Sync();
+    ~Sync() override;
 
-    void onDestroy(const Context *context) override {}
+    Error onDestroy(const Context *context) override;
 
     void setLabel(const std::string &label) override;
     const std::string &getLabel() const override;

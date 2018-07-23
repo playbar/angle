@@ -13,6 +13,7 @@
 #include "libANGLE/Fence.h"
 #include "libANGLE/Path.h"
 #include "libANGLE/Program.h"
+#include "libANGLE/ProgramPipeline.h"
 #include "libANGLE/Renderbuffer.h"
 #include "libANGLE/Sampler.h"
 #include "libANGLE/Shader.h"
@@ -104,6 +105,7 @@ template class TypedResourceManager<Renderbuffer, HandleAllocator, RenderbufferM
 template class TypedResourceManager<Sampler, HandleAllocator, SamplerManager>;
 template class TypedResourceManager<Sync, HandleAllocator, SyncManager>;
 template class TypedResourceManager<Framebuffer, HandleAllocator, FramebufferManager>;
+template class TypedResourceManager<ProgramPipeline, HandleAllocator, ProgramPipelineManager>;
 
 // BufferManager Implementation.
 
@@ -133,6 +135,10 @@ Buffer *BufferManager::getBuffer(GLuint handle) const
 
 // ShaderProgramManager Implementation.
 
+ShaderProgramManager::ShaderProgramManager()
+{
+}
+
 ShaderProgramManager::~ShaderProgramManager()
 {
     ASSERT(mPrograms.empty());
@@ -155,9 +161,9 @@ void ShaderProgramManager::reset(const Context *context)
 
 GLuint ShaderProgramManager::createShader(rx::GLImplFactory *factory,
                                           const gl::Limitations &rendererLimitations,
-                                          GLenum type)
+                                          ShaderType type)
 {
-    ASSERT(type == GL_VERTEX_SHADER || type == GL_FRAGMENT_SHADER || type == GL_COMPUTE_SHADER);
+    ASSERT(type != ShaderType::InvalidEnum);
     GLuint handle    = mHandleAllocator.allocate();
     mShaders.assign(handle, new Shader(this, factory, rendererLimitations, type, handle));
     return handle;
@@ -216,9 +222,11 @@ void ShaderProgramManager::deleteObject(const Context *context,
 // TextureManager Implementation.
 
 // static
-Texture *TextureManager::AllocateNewObject(rx::GLImplFactory *factory, GLuint handle, GLenum target)
+Texture *TextureManager::AllocateNewObject(rx::GLImplFactory *factory,
+                                           GLuint handle,
+                                           TextureType type)
 {
-    Texture *texture = new Texture(factory, handle, target);
+    Texture *texture = new Texture(factory, handle, type);
     texture->addRef();
     return texture;
 }
@@ -240,15 +248,22 @@ Texture *TextureManager::getTexture(GLuint handle) const
     return mObjectMap.query(handle);
 }
 
-void TextureManager::invalidateTextureComplenessCache() const
+void TextureManager::signalAllTexturesDirty(const Context *context) const
 {
     for (const auto &texture : mObjectMap)
     {
         if (texture.second)
         {
-            texture.second->invalidateCompletenessCache();
+            // We don't know if the Texture needs init, but that's ok, since it will only force
+            // a re-check, and will not initialize the pixels if it's not needed.
+            texture.second->signalDirty(context, InitState::MayNeedInit);
         }
     }
+}
+
+void TextureManager::enableHandleAllocatorLogging()
+{
+    mHandleAllocator.enableLogging(true);
 }
 
 // RenderbufferManager Implementation.
@@ -256,7 +271,7 @@ void TextureManager::invalidateTextureComplenessCache() const
 // static
 Renderbuffer *RenderbufferManager::AllocateNewObject(rx::GLImplFactory *factory, GLuint handle)
 {
-    Renderbuffer *renderbuffer = new Renderbuffer(factory->createRenderbuffer(), handle);
+    Renderbuffer *renderbuffer = new Renderbuffer(factory, handle);
     renderbuffer->addRef();
     return renderbuffer;
 }
@@ -332,6 +347,10 @@ Sync *SyncManager::getSync(GLuint handle) const
 
 // PathManager Implementation.
 
+PathManager::PathManager()
+{
+}
+
 ErrorOrResult<GLuint> PathManager::createPaths(rx::GLImplFactory *factory, GLsizei range)
 {
     // Allocate client side handles.
@@ -348,7 +367,7 @@ ErrorOrResult<GLuint> PathManager::createPaths(rx::GLImplFactory *factory, GLsiz
 
     for (GLsizei i = 0; i < range; ++i)
     {
-        const auto impl = paths[static_cast<unsigned>(i)];
+        rx::PathImpl *impl = paths[static_cast<unsigned>(i)];
         const auto id   = client + i;
         mPaths.assign(id, new Path(impl));
     }
@@ -405,12 +424,8 @@ Framebuffer *FramebufferManager::AllocateNewObject(rx::GLImplFactory *factory,
 // static
 void FramebufferManager::DeleteObject(const Context *context, Framebuffer *framebuffer)
 {
-    // Default framebuffer are owned by their respective Surface
-    if (framebuffer->id() != 0)
-    {
-        framebuffer->onDestroy(context);
-        delete framebuffer;
-    }
+    framebuffer->onDestroy(context);
+    delete framebuffer;
 }
 
 GLuint FramebufferManager::createFramebuffer()
@@ -438,6 +453,33 @@ void FramebufferManager::invalidateFramebufferComplenessCache() const
             framebuffer.second->invalidateCompletenessCache();
         }
     }
+}
+
+// ProgramPipelineManager Implementation.
+
+// static
+ProgramPipeline *ProgramPipelineManager::AllocateNewObject(rx::GLImplFactory *factory,
+                                                           GLuint handle)
+{
+    ProgramPipeline *pipeline = new ProgramPipeline(factory, handle);
+    pipeline->addRef();
+    return pipeline;
+}
+
+// static
+void ProgramPipelineManager::DeleteObject(const Context *context, ProgramPipeline *pipeline)
+{
+    pipeline->release(context);
+}
+
+GLuint ProgramPipelineManager::createProgramPipeline()
+{
+    return AllocateEmptyObject(&mHandleAllocator, &mObjectMap);
+}
+
+ProgramPipeline *ProgramPipelineManager::getProgramPipeline(GLuint handle) const
+{
+    return mObjectMap.query(handle);
 }
 
 }  // namespace gl

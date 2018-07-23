@@ -25,31 +25,13 @@ class CubeMapTextureTest : public ANGLETest
     {
         ANGLETest::SetUp();
 
-        const std::string vsSource = SHADER_SOURCE
-        (
-            attribute highp vec4 position;
-            void main(void)
-            {
-                gl_Position = position;
-            }
-        );
-
-        const std::string fsSource = SHADER_SOURCE
-        (
-            uniform highp vec4 color;
-            void main(void)
-            {
-                gl_FragColor = color;
-            }
-        );
-
-        mProgram = CompileProgram(vsSource, fsSource);
+        mProgram = CompileProgram(essl1_shaders::vs::Simple(), essl1_shaders::fs::UniformColor());
         if (mProgram == 0)
         {
             FAIL() << "shader compilation failed.";
         }
 
-        mColorLocation = glGetUniformLocation(mProgram, "color");
+        mColorLocation = glGetUniformLocation(mProgram, essl1_shaders::ColorUniform());
 
         glUseProgram(mProgram);
 
@@ -112,7 +94,7 @@ TEST_P(CubeMapTextureTest, RenderToFacesConsecutively)
         const GLfloat *faceColor = faceColors + (face * 4);
         glUniform4f(mColorLocation, faceColor[0], faceColor[1], faceColor[2], faceColor[3]);
 
-        drawQuad(mProgram, "position", 0.5f);
+        drawQuad(mProgram, essl1_shaders::PositionAttrib(), 0.5f);
         EXPECT_GL_NO_ERROR();
     }
 
@@ -135,6 +117,7 @@ TEST_P(CubeMapTextureTest, RenderToFacesConsecutively)
 // Use this to select which configurations (e.g. which renderer, which GLES major version) these tests should be run against.
 ANGLE_INSTANTIATE_TEST(CubeMapTextureTest,
                        ES2_D3D11(),
+                       ES2_D3D11_FL10_0(),
                        ES2_D3D11_FL9_3(),
                        ES2_OPENGL(),
                        ES3_OPENGL(),

@@ -25,9 +25,8 @@ class MaxTextureSizeTest : public ANGLETest
     {
         ANGLETest::SetUp();
 
-        const std::string vsSource = SHADER_SOURCE
-        (
-            precision highp float;
+        const std::string vsSource =
+            R"(precision highp float;
             attribute vec4 position;
             varying vec2 texcoord;
 
@@ -35,30 +34,25 @@ class MaxTextureSizeTest : public ANGLETest
             {
                 gl_Position = position;
                 texcoord = (position.xy * 0.5) + 0.5;
-            }
-        );
+            })";
 
-        const std::string textureFSSource = SHADER_SOURCE
-        (
-            precision highp float;
+        const std::string textureFSSource =
+            R"(precision highp float;
             uniform sampler2D tex;
             varying vec2 texcoord;
 
             void main()
             {
                 gl_FragColor = texture2D(tex, texcoord);
-            }
-        );
+            })";
 
-        const std::string blueFSSource = SHADER_SOURCE
-        (
-            precision highp float;
+        const std::string blueFSSource =
+            R"(precision highp float;
 
             void main()
             {
                 gl_FragColor = vec4(0.0, 0.0, 1.0, 1.0);
-            }
-        );
+            })";
 
         mTextureProgram = CompileProgram(vsSource, textureFSSource);
         mBlueProgram = CompileProgram(vsSource, blueFSSource);
@@ -96,6 +90,9 @@ class MaxTextureSizeTest : public ANGLETest
 
 TEST_P(MaxTextureSizeTest, SpecificationTexImage)
 {
+    // http://anglebug.com/2690
+    ANGLE_SKIP_TEST_IF(IsWindows() && IsIntel() && IsVulkan());
+
     GLuint tex;
     glGenTextures(1, &tex);
     glBindTexture(GL_TEXTURE_2D, tex);
@@ -222,11 +219,8 @@ TEST_P(MaxTextureSizeTest, SpecificationTexStorage)
 
 TEST_P(MaxTextureSizeTest, RenderToTexture)
 {
-    if (getClientMajorVersion() < 3 && (!extensionEnabled("GL_ANGLE_framebuffer_blit")))
-    {
-        std::cout << "Test skipped due to missing glBlitFramebuffer[ANGLE] support." << std::endl;
-        return;
-    }
+    ANGLE_SKIP_TEST_IF(getClientMajorVersion() < 3 &&
+                       (!extensionEnabled("GL_ANGLE_framebuffer_blit")));
 
     GLuint fbo = 0;
     GLuint textureId = 0;
@@ -297,4 +291,8 @@ TEST_P(MaxTextureSizeTest, RenderToTexture)
 // default framebuffer is BGRA to enable the GL and GLES backends. (http://anglebug.com/1289)
 
 // Use this to select which configurations (e.g. which renderer, which GLES major version) these tests should be run against.
-ANGLE_INSTANTIATE_TEST(MaxTextureSizeTest, ES2_D3D9(), ES2_D3D11(), ES2_D3D11_FL9_3());
+ANGLE_INSTANTIATE_TEST(MaxTextureSizeTest,
+                       ES2_D3D9(),
+                       ES2_D3D11(),
+                       ES2_D3D11_FL9_3(),
+                       ES2_VULKAN());

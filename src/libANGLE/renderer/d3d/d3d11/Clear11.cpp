@@ -1,4 +1,4 @@
-//
+
 // Copyright (c) 2013 The ANGLE Project Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
@@ -56,9 +56,8 @@ namespace rx
 
 namespace
 {
-
-static constexpr uint32_t g_ConstantBufferSize = sizeof(RtvDsvClearInfo<float>);
-static constexpr uint32_t g_VertexSize         = sizeof(d3d11::PositionVertex);
+constexpr uint32_t g_ConstantBufferSize = sizeof(RtvDsvClearInfo<float>);
+constexpr uint32_t g_VertexSize         = sizeof(d3d11::PositionVertex);
 
 // Updates color, depth and alpha components of cached CB if necessary.
 // Returns true if any constants are updated, false otherwise.
@@ -307,8 +306,6 @@ gl::Error Clear11::ensureResourcesInitialized()
     mBlendStateKey.blendState.blendEquationAlpha    = GL_FUNC_ADD;
     mBlendStateKey.blendState.sampleAlphaToCoverage = false;
     mBlendStateKey.blendState.dither                = true;
-    mBlendStateKey.mrt                              = false;
-    memset(mBlendStateKey.rtvMasks, 0, sizeof(mBlendStateKey.rtvMasks));
 
     mResourcesInitialized = true;
     return gl::NoError();
@@ -425,7 +422,7 @@ gl::Error Clear11::clearFramebuffer(const gl::Context *context,
     }
     else
     {
-        const auto colorAttachment = fboData.getFirstColorAttachment();
+        const gl::FramebufferAttachment *colorAttachment = fboData.getFirstColorAttachment();
 
         if (!colorAttachment)
         {
@@ -529,11 +526,11 @@ gl::Error Clear11::clearFramebuffer(const gl::Context *context,
               formatInfo.componentType == GL_UNSIGNED_NORMALIZED ||
               formatInfo.componentType == GL_SIGNED_NORMALIZED))
         {
-            ERR() << "It is undefined behaviour to clear a render buffer which is not "
-                     "normalized fixed point or floating-point to floating point values (color "
-                     "attachment "
-                  << colorAttachmentIndex << " has internal format " << attachment.getFormat()
-                  << ").";
+            WARN() << "It is undefined behaviour to clear a render buffer which is not "
+                      "normalized fixed point or floating-point to floating point values (color "
+                      "attachment "
+                   << colorAttachmentIndex << " has internal format " << attachment.getFormat()
+                   << ").";
         }
 
         if ((formatInfo.redBits == 0 || !clearParams.colorMaskRed) &&
@@ -597,25 +594,19 @@ gl::Error Clear11::clearFramebuffer(const gl::Context *context,
                 ASSERT(!scissorRects.empty());
                 deviceContext1->ClearView(framebufferRTV.get(), clearValues, scissorRects.data(),
                                           static_cast<UINT>(scissorRects.size()));
-                if (mRenderer->getWorkarounds().callClearTwiceOnSmallTarget)
+                if (mRenderer->getWorkarounds().callClearTwice)
                 {
-                    if (clearParams.scissor.width <= 16 || clearParams.scissor.height <= 16)
-                    {
-                        deviceContext1->ClearView(framebufferRTV.get(), clearValues,
-                                                  scissorRects.data(),
-                                                  static_cast<UINT>(scissorRects.size()));
-                    }
+                    deviceContext1->ClearView(framebufferRTV.get(), clearValues,
+                                              scissorRects.data(),
+                                              static_cast<UINT>(scissorRects.size()));
                 }
             }
             else
             {
                 deviceContext->ClearRenderTargetView(framebufferRTV.get(), clearValues);
-                if (mRenderer->getWorkarounds().callClearTwiceOnSmallTarget)
+                if (mRenderer->getWorkarounds().callClearTwice)
                 {
-                    if (framebufferSize.width <= 16 || framebufferSize.height <= 16)
-                    {
-                        deviceContext->ClearRenderTargetView(framebufferRTV.get(), clearValues);
-                    }
+                    deviceContext->ClearRenderTargetView(framebufferRTV.get(), clearValues);
                 }
             }
         }
@@ -698,14 +689,14 @@ gl::Error Clear11::clearFramebuffer(const gl::Context *context,
     mBlendStateKey.blendState.colorMaskGreen = clearParams.colorMaskGreen;
     mBlendStateKey.blendState.colorMaskBlue  = clearParams.colorMaskBlue;
     mBlendStateKey.blendState.colorMaskAlpha = clearParams.colorMaskAlpha;
-    mBlendStateKey.mrt                       = numRtvs > 1;
+    mBlendStateKey.rtvMax                    = numRtvs;
     memcpy(mBlendStateKey.rtvMasks, &rtvMasks[0], sizeof(mBlendStateKey.rtvMasks));
 
     // Get BlendState
-    ID3D11BlendState *blendState = nullptr;
+    const d3d11::BlendState *blendState = nullptr;
     ANGLE_TRY(mRenderer->getBlendState(mBlendStateKey, &blendState));
 
-    ID3D11DepthStencilState *dsState = nullptr;
+    const d3d11::DepthStencilState *dsState = nullptr;
     const float *zValue              = nullptr;
 
     if (dsv)
@@ -727,8 +718,7 @@ gl::Error Clear11::clearFramebuffer(const gl::Context *context,
     switch (clearParams.colorType)
     {
         case GL_FLOAT:
-            dirtyCb = UpdateDataCache(reinterpret_cast<RtvDsvClearInfo<float> *>(&mShaderData),
-                                      clearParams.colorF, zValue, numRtvs, colorMask);
+            dirtyCb = UpdateDataCache(&mShaderData, clearParams.colorF, zValue, numRtvs, colorMask);
             break;
         case GL_UNSIGNED_INT:
             dirtyCb = UpdateDataCache(reinterpret_cast<RtvDsvClearInfo<uint32_t> *>(&mShaderData),
@@ -750,43 +740,32 @@ gl::Error Clear11::clearFramebuffer(const gl::Context *context,
         // Update the constant buffer with the updated cache contents
         // TODO(Shahmeer): Consider using UpdateSubresource1 D3D11_COPY_DISCARD where possible.
         D3D11_MAPPED_SUBRESOURCE mappedResource;
-        HRESULT result = deviceContext->Map(mConstantBuffer.get(), 0, D3D11_MAP_WRITE_DISCARD, 0,
-                                            &mappedResource);
-        if (FAILED(result))
-        {
-            return gl::OutOfMemory() << "Clear11: Failed to map CB, " << gl::FmtHR(result);
-        }
+        ANGLE_TRY(mRenderer->mapResource(mConstantBuffer.get(), 0, D3D11_MAP_WRITE_DISCARD, 0,
+                                         &mappedResource));
 
         memcpy(mappedResource.pData, &mShaderData, g_ConstantBufferSize);
         deviceContext->Unmap(mConstantBuffer.get(), 0);
     }
 
+    auto *stateManager = mRenderer->getStateManager();
+
     // Set the viewport to be the same size as the framebuffer.
-    D3D11_VIEWPORT viewport;
-    viewport.TopLeftX = 0;
-    viewport.TopLeftY = 0;
-    viewport.Width    = static_cast<FLOAT>(framebufferSize.width);
-    viewport.Height   = static_cast<FLOAT>(framebufferSize.height);
-    viewport.MinDepth = 0;
-    viewport.MaxDepth = 1;
-    deviceContext->RSSetViewports(1, &viewport);
+    stateManager->setSimpleViewport(framebufferSize);
 
     // Apply state
-    deviceContext->OMSetBlendState(blendState, nullptr, 0xFFFFFFFF);
+    stateManager->setSimpleBlendState(blendState);
 
     const UINT stencilValue = clearParams.stencilValue & 0xFF;
-    deviceContext->OMSetDepthStencilState(dsState, stencilValue);
+    stateManager->setDepthStencilState(dsState, stencilValue);
 
     if (needScissoredClear)
     {
-        deviceContext->RSSetState(mScissorEnabledRasterizerState.get());
+        stateManager->setRasterizerState(&mScissorEnabledRasterizerState);
     }
     else
     {
-        deviceContext->RSSetState(mScissorDisabledRasterizerState.get());
+        stateManager->setRasterizerState(&mScissorDisabledRasterizerState);
     }
-
-    auto *stateManager = mRenderer->getStateManager();
 
     // Get Shaders
     const d3d11::VertexShader *vs = nullptr;
@@ -800,11 +779,10 @@ gl::Error Clear11::clearFramebuffer(const gl::Context *context,
 
     // Apply Shaders
     stateManager->setDrawShaders(vs, gs, ps);
-    ID3D11Buffer *constantBuffer = mConstantBuffer.get();
-    deviceContext->PSSetConstantBuffers(0, 1, &constantBuffer);
+    stateManager->setPixelConstantBuffer(0, &mConstantBuffer);
 
     // Bind IL & VB if needed
-    deviceContext->IASetIndexBuffer(nullptr, DXGI_FORMAT_UNKNOWN, 0);
+    stateManager->setIndexBuffer(nullptr, DXGI_FORMAT_UNKNOWN, 0);
     stateManager->setInputLayout(il);
 
     if (useVertexBuffer())
@@ -820,7 +798,7 @@ gl::Error Clear11::clearFramebuffer(const gl::Context *context,
     stateManager->setPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
     // Apply render targets
-    stateManager->setOneTimeRenderTargets(context, &rtvs[0], numRtvs, dsv);
+    stateManager->setRenderTargets(&rtvs[0], numRtvs, dsv);
 
     // If scissors are necessary to be applied, then the number of clears is the number of scissor
     // rects. If no scissors are necessary, then a single full-size clear is enough.
@@ -830,7 +808,7 @@ gl::Error Clear11::clearFramebuffer(const gl::Context *context,
         if (needScissoredClear)
         {
             ASSERT(i < scissorRects.size());
-            deviceContext->RSSetScissorRects(1, &scissorRects[i]);
+            stateManager->setScissorRectD3D(scissorRects[i]);
         }
         // Draw the fullscreen quad.
         if (!hasLayeredLayout || isSideBySideFBO)
@@ -844,9 +822,7 @@ gl::Error Clear11::clearFramebuffer(const gl::Context *context,
         }
     }
 
-    // Clean up
-    mRenderer->markAllStateDirty(context);
-
     return gl::NoError();
 }
+
 }  // namespace rx

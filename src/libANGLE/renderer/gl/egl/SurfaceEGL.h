@@ -20,23 +20,23 @@ namespace rx
 class SurfaceEGL : public SurfaceGL
 {
   public:
-    SurfaceEGL(const egl::SurfaceState &state,
-               const FunctionsEGL *egl,
-               EGLConfig config,
-               const std::vector<EGLint> &attribList,
-               RendererGL *renderer);
+    SurfaceEGL(const egl::SurfaceState &state, const FunctionsEGL *egl, EGLConfig config);
     ~SurfaceEGL() override;
 
     egl::Error makeCurrent() override;
     egl::Error swap(const gl::Context *context) override;
+    egl::Error swapWithDamage(const gl::Context *context, EGLint *rects, EGLint n_rects) override;
     egl::Error postSubBuffer(const gl::Context *context,
                              EGLint x,
                              EGLint y,
                              EGLint width,
                              EGLint height) override;
+    egl::Error setPresentationTime(EGLnsecsANDROID time) override;
     egl::Error querySurfacePointerANGLE(EGLint attribute, void **value) override;
-    egl::Error bindTexImage(gl::Texture *texture, EGLint buffer) override;
-    egl::Error releaseTexImage(EGLint buffer) override;
+    egl::Error bindTexImage(const gl::Context *context,
+                            gl::Texture *texture,
+                            EGLint buffer) override;
+    egl::Error releaseTexImage(const gl::Context *context, EGLint buffer) override;
     void setSwapInterval(EGLint interval) override;
     EGLint getWidth() const override;
     EGLint getHeight() const override;
@@ -48,8 +48,10 @@ class SurfaceEGL : public SurfaceGL
   protected:
     const FunctionsEGL *mEGL;
     EGLConfig mConfig;
-    std::vector<EGLint> mAttribList;
     EGLSurface mSurface;
+
+  private:
+    bool mHasSwapBuffersWithDamage;
 };
 
 }  // namespace rx

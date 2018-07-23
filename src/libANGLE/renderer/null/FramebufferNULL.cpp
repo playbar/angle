@@ -109,23 +109,24 @@ GLenum FramebufferNULL::getImplementationColorReadType(const gl::Context *contex
 
     const gl::Format &format = readAttachment->getFormat();
     ASSERT(format.info != nullptr);
-    return format.info->getReadPixelsType();
+    return format.info->getReadPixelsType(context->getClientVersion());
 }
 
 gl::Error FramebufferNULL::readPixels(const gl::Context *context,
                                       const gl::Rectangle &origArea,
                                       GLenum format,
                                       GLenum type,
-                                      void *ptrOrOffset) const
+                                      void *ptrOrOffset)
 {
     const gl::PixelPackState &packState = context->getGLState().getPackState();
+    gl::Buffer *packBuffer = context->getGLState().getTargetBuffer(gl::BufferBinding::PixelPack);
 
     // Get the pointer to write to from the argument or the pack buffer
     GLubyte *pixels = nullptr;
-    if (packState.pixelBuffer.get() != nullptr)
+    if (packBuffer != nullptr)
     {
-        BufferNULL *pixelBuffer = GetImplAs<BufferNULL>(packState.pixelBuffer.get());
-        pixels                  = reinterpret_cast<GLubyte *>(pixelBuffer->getDataPtr());
+        BufferNULL *packBufferGL = GetImplAs<BufferNULL>(packBuffer);
+        pixels                     = reinterpret_cast<GLubyte *>(packBufferGL->getDataPtr());
         pixels += reinterpret_cast<intptr_t>(ptrOrOffset);
     }
     else
@@ -147,12 +148,12 @@ gl::Error FramebufferNULL::readPixels(const gl::Context *context,
     const gl::InternalFormat &glFormat = gl::GetInternalFormatInfo(format, type);
 
     GLuint rowBytes = 0;
-    ANGLE_TRY_RESULT(
-        glFormat.computeRowPitch(type, origArea.width, packState.alignment, packState.rowLength),
-        rowBytes);
+    ANGLE_TRY_CHECKED_MATH(glFormat.computeRowPitch(type, origArea.width, packState.alignment,
+                                                    packState.rowLength, &rowBytes));
 
     GLuint skipBytes = 0;
-    ANGLE_TRY_RESULT(glFormat.computeSkipBytes(rowBytes, 0, packState, false), skipBytes);
+    ANGLE_TRY_CHECKED_MATH(
+        glFormat.computeSkipBytes(type, rowBytes, 0, packState, false, &skipBytes));
     pixels += skipBytes;
 
     // Skip OOB region up to first in bounds pixel
@@ -179,17 +180,20 @@ gl::Error FramebufferNULL::blit(const gl::Context *context,
     return gl::NoError();
 }
 
-bool FramebufferNULL::checkStatus() const
+bool FramebufferNULL::checkStatus(const gl::Context *context) const
 {
     return true;
 }
 
-void FramebufferNULL::syncState(const gl::Context *context,
-                                const gl::Framebuffer::DirtyBits &dirtyBits)
+gl::Error FramebufferNULL::syncState(const gl::Context *context,
+                                     const gl::Framebuffer::DirtyBits &dirtyBits)
 {
+    return gl::NoError();
 }
 
-gl::Error FramebufferNULL::getSamplePosition(size_t index, GLfloat *xy) const
+gl::Error FramebufferNULL::getSamplePosition(const gl::Context *context,
+                                             size_t index,
+                                             GLfloat *xy) const
 {
     return gl::NoError();
 }

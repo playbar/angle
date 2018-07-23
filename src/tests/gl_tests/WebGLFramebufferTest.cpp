@@ -224,30 +224,18 @@ void WebGLFramebufferTest::drawUByteColorQuad(GLuint program,
     Vector4 vecColor = color.toNormalizedVector();
     glUseProgram(program);
     glUniform4fv(uniformLoc, 1, vecColor.data());
-    drawQuad(program, "position", 0.5f, 1.0f, true);
+    drawQuad(program, essl1_shaders::PositionAttrib(), 0.5f, 1.0f, true);
 }
 
 void WebGLFramebufferTest::testDepthStencilDepthStencil(GLint width, GLint height)
 {
-    const std::string &vertexShader =
-        "attribute vec4 position;\n"
-        "void main() {\n"
-        "    gl_Position = position;\n"
-        "}";
-    const std::string &fragmentShader =
-        "precision mediump float;\n"
-        "uniform vec4 color;\n"
-        "void main() {\n"
-        "    gl_FragColor = color;\n"
-        "}";
-
     if (width == 0 || height == 0)
     {
         return;
     }
 
-    ANGLE_GL_PROGRAM(program, vertexShader, fragmentShader);
-    GLint uniformLoc = glGetUniformLocation(program.get(), "color");
+    ANGLE_GL_PROGRAM(program, essl1_shaders::vs::Simple(), essl1_shaders::fs::UniformColor());
+    GLint uniformLoc = glGetUniformLocation(program.get(), essl1_shaders::ColorUniform());
     ASSERT_NE(-1, uniformLoc);
 
     struct TestInfo
@@ -353,9 +341,13 @@ void WebGLFramebufferTest::testDepthStencilRenderbuffer(GLint width,
     // OpenGL itself doesn't seem to guarantee that e.g. a 2 x 0
     // renderbuffer will report 2 for its width when queried.
     if (!(height == 0 && width > 0))
+    {
         EXPECT_EQ(width, getRenderbufferParameter(GL_RENDERBUFFER_WIDTH));
+    }
     if (!(width == 0 && height > 0))
+    {
         EXPECT_EQ(height, getRenderbufferParameter(GL_RENDERBUFFER_HEIGHT));
+    }
     EXPECT_EQ(GL_DEPTH_STENCIL, getRenderbufferParameter(GL_RENDERBUFFER_INTERNAL_FORMAT));
     EXPECT_EQ(0, getRenderbufferParameter(GL_RENDERBUFFER_RED_SIZE));
     EXPECT_EQ(0, getRenderbufferParameter(GL_RENDERBUFFER_GREEN_SIZE));
@@ -547,7 +539,7 @@ void WebGLFramebufferTest::testRenderingAndReading(GLuint program)
     EXPECT_GL_NO_ERROR();
 
     // drawArrays with incomplete framebuffer
-    drawQuad(program, "position", 0.5f, 1.0f, true);
+    drawQuad(program, essl1_shaders::PositionAttrib(), 0.5f, 1.0f, true);
     EXPECT_GL_ERROR(GL_INVALID_FRAMEBUFFER_OPERATION);
 
     // readPixels from incomplete framebuffer
@@ -579,11 +571,7 @@ void WebGLFramebufferTest::testUsingIncompleteFramebuffer(GLenum depthFormat,
                                                           GLenum depthAttachment)
 {
     // Simple draw program.
-    const std::string &vertexShader =
-        "attribute vec4 position; void main() { gl_Position = position; }";
-    const std::string &fragmentShader = "void main() { gl_FragColor = vec4(1, 0, 0, 1); }";
-
-    ANGLE_GL_PROGRAM(program, vertexShader, fragmentShader);
+    ANGLE_GL_PROGRAM(program, essl1_shaders::vs::Simple(), essl1_shaders::fs::Red());
 
     GLFramebuffer fbo;
     glBindFramebuffer(GL_FRAMEBUFFER, fbo);
@@ -789,19 +777,17 @@ void TestReadingMissingAttachment(int size)
 void WebGLFramebufferTest::testDrawingMissingAttachment()
 {
     // Simple draw program.
-    const std::string &vertexShader   = "attribute vec4 pos; void main() { gl_Position = pos; }";
-    const std::string &fragmentShader = "void main() { gl_FragColor = vec4(1, 0, 0, 1); }";
-    ANGLE_GL_PROGRAM(program, vertexShader, fragmentShader);
+    ANGLE_GL_PROGRAM(program, essl1_shaders::vs::Simple(), essl1_shaders::fs::Red());
 
     glClear(GL_COLOR_BUFFER_BIT);
     EXPECT_GL_NO_ERROR();
 
     // try glDrawArrays
-    drawQuad(program, "pos", 0.5f, 1.0f, true);
+    drawQuad(program, essl1_shaders::PositionAttrib(), 0.5f, 1.0f, true);
     EXPECT_GL_NO_ERROR();
 
     // try glDrawElements
-    drawIndexedQuad(program, "pos", 0.5f, 1.0f, true);
+    drawIndexedQuad(program, essl1_shaders::PositionAttrib(), 0.5f, 1.0f, true);
     EXPECT_GL_NO_ERROR();
 }
 
@@ -847,11 +833,7 @@ TEST_P(WebGLFramebufferTest, TextureAttachmentCommitBug)
         glRequestExtensionANGLE("GL_ANGLE_depth_texture");
     }
 
-    if (!extensionEnabled("GL_ANGLE_depth_texture"))
-    {
-        std::cout << "Test skipped because depth textures are not available.\n";
-        return;
-    }
+    ANGLE_SKIP_TEST_IF(!extensionEnabled("GL_ANGLE_depth_texture"));
 
     GLTexture depthTexture;
     glBindTexture(GL_TEXTURE_2D, depthTexture.get());

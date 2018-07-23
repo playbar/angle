@@ -15,8 +15,6 @@
 namespace rx
 {
 
-static const int kDeviceLostCheckPeriod = 64;
-
 //
 // Template helpers for set and test operations.
 //
@@ -93,7 +91,8 @@ gl::Error FenceNV11::finish()
         loopCount++;
         ANGLE_TRY(FenceTestHelper(this, true, &finished));
 
-        if (loopCount % kDeviceLostCheckPeriod == 0 && mRenderer->testDeviceLost())
+        bool checkDeviceLost = (loopCount % kPollingD3DDeviceLostCheckFrequency) == 0;
+        if (checkDeviceLost && mRenderer->testDeviceLost())
         {
             return gl::OutOfMemory() << "Device was lost while querying result of an event query.";
         }
@@ -169,8 +168,14 @@ gl::Error Sync11::clientWait(GLbitfield flags, GLuint64 timeout, GLenum *outResu
     BOOL success                 = QueryPerformanceCounter(&currentCounter);
     ASSERT(success);
 
-    LONGLONG timeoutInSeconds = static_cast<LONGLONG>(timeout) * static_cast<LONGLONG>(1000000ll);
+    LONGLONG timeoutInSeconds = static_cast<LONGLONG>(timeout / 1000000000ull);
     LONGLONG endCounter       = currentCounter.QuadPart + mCounterFrequency * timeoutInSeconds;
+
+    // Extremely unlikely, but if mCounterFrequency is large enough, endCounter can wrap
+    if (endCounter < currentCounter.QuadPart)
+    {
+        endCounter = MAXLONGLONG;
+    }
 
     int loopCount = 0;
     while (currentCounter.QuadPart < endCounter && !result)
@@ -187,7 +192,8 @@ gl::Error Sync11::clientWait(GLbitfield flags, GLuint64 timeout, GLenum *outResu
             return error;
         }
 
-        if ((loopCount % kDeviceLostCheckPeriod) == 0 && mRenderer->testDeviceLost())
+        bool checkDeviceLost = (loopCount % kPollingD3DDeviceLostCheckFrequency) == 0;
+        if (checkDeviceLost && mRenderer->testDeviceLost())
         {
             *outResult = GL_WAIT_FAILED;
             return gl::OutOfMemory() << "Device was lost while querying result of an event query.";

@@ -32,28 +32,7 @@ class DifferentStencilMasksTest : public ANGLETest
     {
         ANGLETest::SetUp();
 
-        const std::string vertexShaderSource = SHADER_SOURCE
-        (
-            precision highp float;
-            attribute vec4 position;
-
-            void main()
-            {
-                gl_Position = position;
-            }
-        );
-
-        const std::string fragmentShaderSource = SHADER_SOURCE
-        (
-            precision highp float;
-
-            void main()
-            {
-                gl_FragColor = vec4(0.0, 0.0, 1.0, 1.0);
-            }
-        );
-
-        mProgram = CompileProgram(vertexShaderSource, fragmentShaderSource);
+        mProgram = CompileProgram(essl1_shaders::vs::Simple(), essl1_shaders::fs::Blue());
         ASSERT_NE(0u, mProgram);
 
         glEnable(GL_STENCIL_TEST);
@@ -81,7 +60,7 @@ TEST_P(DifferentStencilMasksTest, DrawWithSameEffectiveMask)
 
     glUseProgram(mProgram);
 
-    drawQuad(mProgram, "position", 0.5f);
+    drawQuad(mProgram, essl1_shaders::PositionAttrib(), 0.5f);
 
     EXPECT_GL_NO_ERROR();
 }
@@ -94,7 +73,7 @@ TEST_P(DifferentStencilMasksTest, DrawWithDifferentMask)
 
     glUseProgram(mProgram);
 
-    drawQuad(mProgram, "position", 0.5f);
+    drawQuad(mProgram, essl1_shaders::PositionAttrib(), 0.5f);
 
     EXPECT_GL_ERROR(GL_INVALID_OPERATION);
 }
@@ -118,28 +97,7 @@ class DifferentStencilMasksWithoutStencilBufferTest : public ANGLETest
     {
         ANGLETest::SetUp();
 
-        const std::string vertexShaderSource = SHADER_SOURCE
-        (
-            precision highp float;
-            attribute vec4 position;
-
-            void main()
-            {
-                gl_Position = position;
-            }
-        );
-
-        const std::string fragmentShaderSource = SHADER_SOURCE
-        (
-            precision highp float;
-
-            void main()
-            {
-                gl_FragColor = vec4(0.0, 0.0, 1.0, 1.0);
-            }
-        );
-
-        mProgram = CompileProgram(vertexShaderSource, fragmentShaderSource);
+        mProgram = CompileProgram(essl1_shaders::vs::Simple(), essl1_shaders::fs::Blue());
         ASSERT_NE(0u, mProgram);
 
         glEnable(GL_STENCIL_TEST);
@@ -166,7 +124,7 @@ TEST_P(DifferentStencilMasksWithoutStencilBufferTest, DrawWithDifferentMask)
 
     glUseProgram(mProgram);
 
-    drawQuad(mProgram, "position", 0.5f);
+    drawQuad(mProgram, essl1_shaders::PositionAttrib(), 0.5f);
 
     EXPECT_GL_NO_ERROR();
 }

@@ -184,10 +184,18 @@ BindingsParams D3D9Params(AllocationStyle allocationStyle)
     return params;
 }
 
-BindingsParams OpenGLParams(AllocationStyle allocationStyle)
+BindingsParams OpenGLOrGLESParams(AllocationStyle allocationStyle)
 {
     BindingsParams params;
-    params.eglParameters   = egl_platform::OPENGL_NULL();
+    params.eglParameters   = egl_platform::OPENGL_OR_GLES(true);
+    params.allocationStyle = allocationStyle;
+    return params;
+}
+
+BindingsParams VulkanParams(AllocationStyle allocationStyle)
+{
+    BindingsParams params;
+    params.eglParameters   = egl_platform::VULKAN_NULL();
     params.allocationStyle = allocationStyle;
     return params;
 }
@@ -202,7 +210,9 @@ ANGLE_INSTANTIATE_TEST(BindingsBenchmark,
                        D3D11Params(AT_INITIALIZATION),
                        D3D9Params(EVERY_ITERATION),
                        D3D9Params(AT_INITIALIZATION),
-                       OpenGLParams(EVERY_ITERATION),
-                       OpenGLParams(AT_INITIALIZATION));
+                       OpenGLOrGLESParams(EVERY_ITERATION),
+                       OpenGLOrGLESParams(AT_INITIALIZATION),
+                       VulkanParams(EVERY_ITERATION),
+                       VulkanParams(AT_INITIALIZATION));
 
 }  // namespace angle

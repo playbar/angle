@@ -63,7 +63,7 @@ void GenerateResources(ShBuiltInResources *resources)
 
     resources->OES_standard_derivatives = 0;
     resources->OES_EGL_image_external = 0;
-    resources->OES_geometry_shader      = 1;
+    resources->EXT_geometry_shader      = 1;
 }
 
 int main(int argc, char *argv[])
@@ -270,11 +270,11 @@ int main(int argc, char *argv[])
                   }
                   compiler = computeCompiler;
                   break;
-              case GL_GEOMETRY_SHADER_OES:
+              case GL_GEOMETRY_SHADER_EXT:
                   if (geometryCompiler == 0)
                   {
                       geometryCompiler =
-                          sh::ConstructCompiler(GL_GEOMETRY_SHADER_OES, spec, output, &resources);
+                          sh::ConstructCompiler(GL_GEOMETRY_SHADER_EXT, spec, output, &resources);
                   }
                   compiler = geometryCompiler;
                   break;
@@ -282,6 +282,17 @@ int main(int argc, char *argv[])
             }
             if (compiler)
             {
+                switch (output)
+                {
+                    case SH_HLSL_3_0_OUTPUT:
+                    case SH_HLSL_4_1_OUTPUT:
+                    case SH_HLSL_4_0_FL9_3_OUTPUT:
+                        compileOptions &= ~SH_SELECT_VIEW_IN_NV_GLSL_VERTEX_SHADER;
+                        break;
+                    default:
+                        break;
+                }
+
                 bool compiled = CompileFile(argv[0], compiler, compileOptions);
 
                 LogMsg("BEGIN", "COMPILER", numCompiles, "INFO LOG");
@@ -402,7 +413,7 @@ sh::GLenum FindShaderType(const char *fileName)
         if (strncmp(ext, ".comp", 5) == 0)
             return GL_COMPUTE_SHADER;
         if (strncmp(ext, ".geom", 5) == 0)
-            return GL_GEOMETRY_SHADER_OES;
+            return GL_GEOMETRY_SHADER_EXT;
     }
 
     return GL_FRAGMENT_SHADER;
@@ -560,9 +571,14 @@ void PrintVariable(const std::string &prefix, size_t index, const sh::ShaderVari
       default: typeName = "UNKNOWN"; break;
     }
 
-    printf("%s %u : name=%s, mappedName=%s, type=%s, arraySize=%u\n", prefix.c_str(),
+    printf("%s %u : name=%s, mappedName=%s, type=%s, arraySizes=", prefix.c_str(),
            static_cast<unsigned int>(index), var.name.c_str(), var.mappedName.c_str(),
-           typeName.c_str(), var.arraySize);
+           typeName.c_str());
+    for (unsigned int arraySize : var.arraySizes)
+    {
+        printf("%u ", arraySize);
+    }
+    printf("\n");
     if (var.fields.size())
     {
         std::string structPrefix;

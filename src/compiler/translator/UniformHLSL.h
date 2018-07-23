@@ -15,28 +15,32 @@
 
 namespace sh
 {
+class ImmutableString;
 class StructureHLSL;
+class TSymbolTable;
 
 class UniformHLSL : angle::NonCopyable
 {
   public:
     UniformHLSL(StructureHLSL *structureHLSL,
                 ShShaderOutput outputType,
-                const std::vector<Uniform> &uniforms);
+                const std::vector<Uniform> &uniforms,
+                unsigned int firstUniformRegister);
 
     void reserveUniformRegisters(unsigned int registerCount);
     void reserveUniformBlockRegisters(unsigned int registerCount);
     void uniformsHeader(TInfoSinkBase &out,
                         ShShaderOutput outputType,
-                        const ReferencedSymbols &referencedUniforms);
+                        const ReferencedVariables &referencedUniforms,
+                        TSymbolTable *symbolTable);
 
     // Must be called after uniformsHeader
     void samplerMetadataUniforms(TInfoSinkBase &out, const char *reg);
 
-    TString uniformBlocksHeader(const ReferencedSymbols &referencedInterfaceBlocks);
+    TString uniformBlocksHeader(const ReferencedInterfaceBlocks &referencedInterfaceBlocks);
 
     // Used for direct index references
-    static TString uniformBlockInstanceString(const TInterfaceBlock &interfaceBlock,
+    static TString UniformBlockInstanceString(const ImmutableString &instanceName,
                                               unsigned int arrayIndex);
 
     const std::map<std::string, unsigned int> &getUniformBlockRegisterMap() const
@@ -50,26 +54,26 @@ class UniformHLSL : angle::NonCopyable
 
   private:
     TString uniformBlockString(const TInterfaceBlock &interfaceBlock,
+                               const TVariable *instanceVariable,
                                unsigned int registerIndex,
                                unsigned int arrayIndex);
     TString uniformBlockMembersString(const TInterfaceBlock &interfaceBlock,
                                       TLayoutBlockStorage blockStorage);
     TString uniformBlockStructString(const TInterfaceBlock &interfaceBlock);
-    const Uniform *findUniformByName(const TString &name) const;
+    const Uniform *findUniformByName(const ImmutableString &name) const;
 
     void outputHLSL4_0_FL9_3Sampler(TInfoSinkBase &out,
                                     const TType &type,
-                                    const TName &name,
+                                    const TVariable &variable,
                                     const unsigned int registerIndex);
-
     void outputUniform(TInfoSinkBase &out,
                        const TType &type,
-                       const TName &name,
+                       const TVariable &variable,
                        const unsigned int registerIndex);
 
     // Returns the uniform's register index
     unsigned int assignUniformRegister(const TType &type,
-                                       const TString &name,
+                                       const ImmutableString &name,
                                        unsigned int *outRegisterCount);
     unsigned int assignSamplerInStructUniformRegister(const TType &type,
                                                       const TString &name,
@@ -77,14 +81,31 @@ class UniformHLSL : angle::NonCopyable
 
     void outputHLSLSamplerUniformGroup(
         TInfoSinkBase &out,
-        const HLSLTextureSamplerGroup textureGroup,
-        const TVector<const TIntermSymbol *> &group,
-        const TMap<const TIntermSymbol *, TString> &samplerInStructSymbolsToAPINames,
+        const HLSLTextureGroup textureGroup,
+        const TVector<const TVariable *> &group,
+        const TMap<const TVariable *, TString> &samplerInStructSymbolsToAPINames,
         unsigned int *groupTextureRegisterIndex);
+
+    void outputHLSLImageUniformIndices(TInfoSinkBase &out,
+                                       const TVector<const TVariable *> &group,
+                                       unsigned int imageArrayIndex,
+                                       unsigned int *groupRegisterCount);
+    void outputHLSLReadonlyImageUniformGroup(TInfoSinkBase &out,
+                                             const HLSLTextureGroup textureGroup,
+                                             const TVector<const TVariable *> &group,
+                                             unsigned int *groupTextureRegisterIndex,
+                                             unsigned int *imageUniformGroupIndex);
+    void outputHLSLImageUniformGroup(TInfoSinkBase &out,
+                                     const HLSLRWTextureGroup textureGroup,
+                                     const TVector<const TVariable *> &group,
+                                     unsigned int *groupTextureRegisterIndex,
+                                     unsigned int *imageUniformGroupIndex);
 
     unsigned int mUniformRegister;
     unsigned int mUniformBlockRegister;
-    unsigned int mSamplerRegister;
+    unsigned int mTextureRegister;
+    unsigned int mRWTextureRegister;
+    unsigned int mSamplerCount;
     StructureHLSL *mStructureHLSL;
     ShShaderOutput mOutputType;
 

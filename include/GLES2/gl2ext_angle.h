@@ -21,15 +21,15 @@
 #define GL_ANGLE_request_extension 1
 #define GL_REQUESTABLE_EXTENSIONS_ANGLE   0x93A8
 #define GL_NUM_REQUESTABLE_EXTENSIONS_ANGLE 0x93A8
-typedef GLboolean(GL_APIENTRYP PFNGLREQUESTEXTENSIONANGLEPROC) (const GLchar *name);
+typedef void (GL_APIENTRYP PFNGLREQUESTEXTENSIONANGLEPROC) (const GLchar *name);
 #ifdef GL_GLEXT_PROTOTYPES
-GL_APICALL GLboolean GL_APIENTRY glRequestExtensionANGLE (const GLchar *name);
+GL_APICALL void GL_APIENTRY glRequestExtensionANGLE (const GLchar *name);
 #endif
 #endif /* GL_ANGLE_webgl_compatibility */
 
 #ifndef GL_ANGLE_robust_resource_initialization
 #define GL_ANGLE_robust_resource_initialization 1
-#define GL_CONTEXT_ROBUST_RESOURCE_INITIALIZATION_ANGLE 0x93AB
+#define GL_ROBUST_RESOURCE_INITIALIZATION_ANGLE 0x93AB
 #endif /* GL_ANGLE_robust_resource_initialization */
 
 #ifndef GL_CHROMIUM_framebuffer_mixed_samples
@@ -545,6 +545,14 @@ GL_APICALL void GL_APIENTRY glFramebufferTextureMultiviewSideBySideANGLE(GLenum 
 #define GL_TEXTURE_BINDING_RECTANGLE_ANGLE 0x84F6
 #define GL_SAMPLER_2D_RECT_ANGLE 0x8B63
 #endif /* GL_ANGLE_texture_rectangle */
+
+#ifndef GL_ANGLE_explicit_context
+#define GL_ANGLE_explicit_context
+typedef void *GLeglContext;
+#include "gl2ext_explicit_context_autogen.inc"
+#include "../GLES3/gl3ext_explicit_context_autogen.inc"
+#include "../GLES3/gl31ext_explicit_context_autogen.inc"
+#endif /* GL_ANGLE_explicit_context */
 
 // clang-format on
 

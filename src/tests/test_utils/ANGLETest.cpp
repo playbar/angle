@@ -89,7 +89,7 @@ std::array<angle::Vector3, 4> GetIndexedQuadVertices()
     return vertices;
 }
 
-static constexpr GLushort IndexedQuadIndices[6] = {0, 1, 2, 0, 2, 3};
+static constexpr std::array<GLushort, 6> IndexedQuadIndices = {{0, 1, 2, 0, 2, 3}};
 
 }  // anonymous namespace
 
@@ -125,6 +125,31 @@ GLColor::GLColor(const angle::Vector4 &floatColor)
 GLColor::GLColor(GLuint colorValue) : R(0), G(0), B(0), A(0)
 {
     memcpy(&R, &colorValue, sizeof(GLuint));
+}
+
+testing::AssertionResult GLColor::ExpectNear(const GLColor &expected, const GLColor &err) const
+{
+    testing::AssertionResult result(
+        abs(int(expected.R) - this->R) <= err.R && abs(int(expected.G) - this->G) <= err.G &&
+        abs(int(expected.B) - this->B) <= err.B && abs(int(expected.A) - this->A) <= err.A);
+    if (!bool(result))
+    {
+        result << "Expected " << expected << "+/-" << err << ", was " << *this;
+    }
+    return result;
+}
+
+void CreatePixelCenterWindowCoords(const std::vector<Vector2> &pixelPoints,
+                                   int windowWidth,
+                                   int windowHeight,
+                                   std::vector<Vector3> *outVertices)
+{
+    for (Vector2 pixelPoint : pixelPoints)
+    {
+        outVertices->emplace_back(Vector3((pixelPoint[0] + 0.5f) * 2.0f / windowWidth - 1.0f,
+                                          (pixelPoint[1] + 0.5f) * 2.0f / windowHeight - 1.0f,
+                                          0.0f));
+    }
 }
 
 angle::Vector4 GLColor::toNormalizedVector() const
@@ -190,6 +215,12 @@ std::array<angle::Vector3, 6> ANGLETestBase::GetQuadVertices()
     vertices[4] = angle::Vector3(1.0f, -1.0f, 0.5f);
     vertices[5] = angle::Vector3(1.0f, 1.0f, 0.5f);
     return vertices;
+}
+
+// static
+std::array<GLushort, 6> ANGLETestBase::GetQuadIndices()
+{
+    return angle::IndexedQuadIndices;
 }
 
 ANGLETestBase::ANGLETestBase(const angle::PlatformParameters &params)
@@ -383,7 +414,7 @@ void ANGLETestBase::setupIndexedQuadIndexBuffer()
 
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, mQuadIndexBuffer);
     glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(angle::IndexedQuadIndices),
-                 angle::IndexedQuadIndices, GL_STATIC_DRAW);
+                 angle::IndexedQuadIndices.data(), GL_STATIC_DRAW);
 }
 
 // static
@@ -413,6 +444,17 @@ void ANGLETestBase::drawQuad(GLuint program,
              false, 0u);
 }
 
+void ANGLETestBase::drawQuadInstanced(GLuint program,
+                                      const std::string &positionAttribName,
+                                      GLfloat positionAttribZ,
+                                      GLfloat positionAttribXYScale,
+                                      bool useVertexBuffer,
+                                      GLuint numInstances)
+{
+    drawQuad(program, positionAttribName, positionAttribZ, positionAttribXYScale, useVertexBuffer,
+             true, numInstances);
+}
+
 void ANGLETestBase::drawQuad(GLuint program,
                              const std::string &positionAttribName,
                              GLfloat positionAttribZ,
@@ -433,6 +475,8 @@ void ANGLETestBase::drawQuad(GLuint program,
 
     GLint positionLocation = glGetAttribLocation(program, positionAttribName.c_str());
 
+    std::array<angle::Vector3, 6> quadVertices;
+
     if (useVertexBuffer)
     {
         setupQuadVertexBuffer(positionAttribZ, positionAttribXYScale);
@@ -441,7 +485,7 @@ void ANGLETestBase::drawQuad(GLuint program,
     }
     else
     {
-        auto quadVertices = GetQuadVertices();
+        quadVertices = GetQuadVertices();
         for (angle::Vector3 &vertex : quadVertices)
         {
             vertex.x() *= positionAttribXYScale;
@@ -541,7 +585,7 @@ void ANGLETestBase::drawIndexedQuad(GLuint program,
     }
     else
     {
-        indices = angle::IndexedQuadIndices;
+        indices = angle::IndexedQuadIndices.data();
     }
 
     if (!restrictedRange)
@@ -641,9 +685,9 @@ GLuint ANGLETestBase::compileShader(GLenum type, const std::string &source)
 
 void ANGLETestBase::checkD3D11SDKLayersMessages()
 {
-#if defined(ANGLE_PLATFORM_WINDOWS) && !defined(NDEBUG)
-    // In debug D3D11 mode, check ID3D11InfoQueue to see if any D3D11 SDK Layers messages
-    // were outputted by the test
+#if defined(ANGLE_PLATFORM_WINDOWS)
+    // On Windows D3D11, check ID3D11InfoQueue to see if any D3D11 SDK Layers messages
+    // were outputted by the test. We enable the Debug layers in Release tests as well.
     if (mIgnoreD3D11SDKLayersWarnings ||
         mEGLWindow->getPlatform().renderer != EGL_PLATFORM_ANGLE_TYPE_D3D11_ANGLE ||
         mEGLWindow->getDisplay() == EGL_NO_DISPLAY)
@@ -715,7 +759,7 @@ void ANGLETestBase::checkD3D11SDKLayersMessages()
     }
 
     SafeRelease(infoQueue);
-#endif
+#endif  // defined(ANGLE_PLATFORM_WINDOWS)
 }
 
 bool ANGLETestBase::extensionEnabled(const std::string &extName)
@@ -818,6 +862,11 @@ void ANGLETestBase::setWebGLCompatibilityEnabled(bool webglCompatibility)
     mEGLWindow->setWebGLCompatibilityEnabled(webglCompatibility);
 }
 
+void ANGLETestBase::setExtensionsEnabled(bool extensionsEnabled)
+{
+    mEGLWindow->setExtensionsEnabled(extensionsEnabled);
+}
+
 void ANGLETestBase::setRobustAccess(bool enabled)
 {
     mEGLWindow->setRobustAccess(enabled);
@@ -846,6 +895,11 @@ void ANGLETestBase::setRobustResourceInit(bool enabled)
 void ANGLETestBase::setContextProgramCacheEnabled(bool enabled)
 {
     mEGLWindow->setContextProgramCacheEnabled(enabled);
+}
+
+void ANGLETestBase::setContextVirtualization(bool enabled)
+{
+    mEGLWindow->setContextVirtualization(enabled);
 }
 
 void ANGLETestBase::setDeferContextInit(bool enabled)
@@ -900,8 +954,6 @@ bool ANGLETestBase::InitTestWindow()
 
     mOSWindow->setVisible(true);
 
-    mGLESLibrary.reset(angle::loadLibrary("libGLESv2"));
-
     return true;
 }
 
@@ -914,8 +966,6 @@ bool ANGLETestBase::DestroyTestWindow()
         delete mOSWindow;
         mOSWindow = nullptr;
     }
-
-    mGLESLibrary.reset(nullptr);
 
     return true;
 }
@@ -1100,7 +1150,6 @@ ANGLETestBase::ScopedIgnorePlatformMessages::~ScopedIgnorePlatformMessages()
 
 OSWindow *ANGLETestBase::mOSWindow = nullptr;
 Optional<EGLint> ANGLETestBase::mLastRendererType;
-std::unique_ptr<angle::Library> ANGLETestBase::mGLESLibrary;
 
 void ANGLETestEnvironment::SetUp()
 {

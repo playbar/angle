@@ -39,7 +39,7 @@ class ProgramGL : public ProgramImpl
     void setSeparable(bool separable) override;
 
     gl::LinkResult link(const gl::Context *contextImpl,
-                        const gl::VaryingPacking &packing,
+                        const gl::ProgramLinkedResources &resources,
                         gl::InfoLog &infoLog) override;
     GLboolean validate(const gl::Caps &caps, gl::InfoLog *infoLog) override;
 
@@ -71,19 +71,13 @@ class ProgramGL : public ProgramImpl
 
     void setUniformBlockBinding(GLuint uniformBlockIndex, GLuint uniformBlockBinding) override;
 
-    bool getUniformBlockSize(const std::string &blockName,
-                             const std::string &blockMappedName,
-                             size_t *sizeOut) const override;
-    bool getUniformBlockMemberInfo(const std::string &memberUniformName,
-                                   const std::string &memberUniformMappedName,
-                                   sh::BlockMemberInfo *memberInfoOut) const override;
-
     void setPathFragmentInputGen(const std::string &inputName,
                                  GLenum genMode,
                                  GLint components,
                                  const GLfloat *coeffs) override;
 
-    void markUnusedUniformLocations(std::vector<gl::VariableLocation> *uniformLocations) override;
+    void markUnusedUniformLocations(std::vector<gl::VariableLocation> *uniformLocations,
+                                    std::vector<gl::SamplerBinding> *samplerBindings) override;
 
     GLuint getProgramID() const;
 
@@ -95,6 +89,22 @@ class ProgramGL : public ProgramImpl
     bool checkLinkStatus(gl::InfoLog &infoLog);
     void postLink();
     void reapplyUBOBindingsIfNeeded(const gl::Context *context);
+
+    bool getUniformBlockSize(const std::string &blockName,
+                             const std::string &blockMappedName,
+                             size_t *sizeOut) const;
+    bool getUniformBlockMemberInfo(const std::string &memberUniformName,
+                                   const std::string &memberUniformMappedName,
+                                   sh::BlockMemberInfo *memberInfoOut) const;
+    bool getShaderStorageBlockMemberInfo(const std::string &memberName,
+                                         const std::string &memberMappedName,
+                                         sh::BlockMemberInfo *memberInfoOut) const;
+    bool getShaderStorageBlockSize(const std::string &blockName,
+                                   const std::string &blockMappedName,
+                                   size_t *sizeOut) const;
+    void getAtomicCounterBufferSizeMap(std::map<int, unsigned int> *sizeMapOut) const;
+
+    void linkResources(const gl::ProgramLinkedResources &resources);
 
     // Helper function, makes it simpler to type.
     GLint uniLoc(GLint glLocation) const { return mUniformRealLocationMap[glLocation]; }

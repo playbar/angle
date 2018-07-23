@@ -27,6 +27,8 @@ void OverrideWorkaroundsD3D(angle::PlatformMethods *platform, angle::Workarounds
 }
 }  // namespace
 
+bool g_OnlyOneRunFrame = false;
+
 ANGLEPerfTest::ANGLEPerfTest(const std::string &name, const std::string &suffix)
     : mName(name),
       mSuffix(suffix),
@@ -58,7 +60,7 @@ void ANGLEPerfTest::run()
         {
             ++mNumStepsPerformed;
         }
-        if (mTimer->getElapsedTime() > mRunTimeSeconds)
+        if (mTimer->getElapsedTime() > mRunTimeSeconds || g_OnlyOneRunFrame)
         {
             mRunning = false;
         }
@@ -121,7 +123,7 @@ std::string RenderTestParams::suffix() const
 ANGLERenderTest::ANGLERenderTest(const std::string &name, const RenderTestParams &testParams)
     : ANGLEPerfTest(name, testParams.suffix()),
       mTestParams(testParams),
-      mEGLWindow(nullptr),
+      mEGLWindow(createEGLWindow(testParams)),
       mOSWindow(nullptr)
 {
 }
@@ -131,7 +133,7 @@ ANGLERenderTest::ANGLERenderTest(const std::string &name,
                                  const std::vector<std::string> &extensionPrerequisites)
     : ANGLEPerfTest(name, testParams.suffix()),
       mTestParams(testParams),
-      mEGLWindow(nullptr),
+      mEGLWindow(createEGLWindow(testParams)),
       mOSWindow(nullptr),
       mExtensionPrerequisites(extensionPrerequisites)
 {
@@ -148,8 +150,7 @@ void ANGLERenderTest::SetUp()
     ANGLEPerfTest::SetUp();
 
     mOSWindow = CreateOSWindow();
-    mEGLWindow = new EGLWindow(mTestParams.majorVersion, mTestParams.minorVersion,
-                               mTestParams.eglParameters);
+    ASSERT(mEGLWindow != nullptr);
     mEGLWindow->setSwapInterval(0);
 
     mPlatformMethods.overrideWorkaroundsD3D = OverrideWorkaroundsD3D;
@@ -256,4 +257,21 @@ bool ANGLERenderTest::areExtensionPrerequisitesFulfilled() const
         }
     }
     return true;
+}
+
+void ANGLERenderTest::setWebGLCompatibilityEnabled(bool webglCompatibility)
+{
+    mEGLWindow->setWebGLCompatibilityEnabled(webglCompatibility);
+}
+
+void ANGLERenderTest::setRobustResourceInit(bool enabled)
+{
+    mEGLWindow->setRobustResourceInit(enabled);
+}
+
+// static
+EGLWindow *ANGLERenderTest::createEGLWindow(const RenderTestParams &testParams)
+{
+    return new EGLWindow(testParams.majorVersion, testParams.minorVersion,
+                         testParams.eglParameters);
 }

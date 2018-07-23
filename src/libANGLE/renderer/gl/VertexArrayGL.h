@@ -23,6 +23,8 @@ class VertexArrayGL : public VertexArrayImpl
     VertexArrayGL(const gl::VertexArrayState &data,
                   const FunctionsGL *functions,
                   StateManagerGL *stateManager);
+    ~VertexArrayGL() override;
+
     void destroy(const gl::Context *context) override;
 
     gl::Error syncDrawArraysState(const gl::Context *context,
@@ -38,13 +40,15 @@ class VertexArrayGL : public VertexArrayImpl
                                     GLsizei instanceCount,
                                     bool primitiveRestartEnabled,
                                     const void **outIndices) const;
-    gl::Error syncElementArrayState(const gl::Context *context) const;
 
     GLuint getVertexArrayID() const;
     GLuint getAppliedElementArrayBufferID() const;
 
-    void syncState(const gl::Context *context,
-                   const gl::VertexArray::DirtyBits &dirtyBits) override;
+    gl::Error syncState(const gl::Context *context,
+                        const gl::VertexArray::DirtyBits &dirtyBits,
+                        const gl::VertexArray::DirtyAttribBitsArray &attribBits,
+                        const gl::VertexArray::DirtyBindingBitsArray &bindingBits) override;
+
     void applyNumViewsToDivisor(int numViews);
 
   private:
@@ -70,16 +74,22 @@ class VertexArrayGL : public VertexArrayImpl
 
     // Returns the amount of space needed to stream all attributes that need streaming
     // and the data size of the largest attribute
-    void computeStreamingAttributeSizes(const gl::AttributesMask &activeAttributesMask,
+    void computeStreamingAttributeSizes(const gl::AttributesMask &attribsToStream,
                                         GLsizei instanceCount,
                                         const gl::IndexRange &indexRange,
                                         size_t *outStreamingDataSize,
                                         size_t *outMaxAttributeDataSize) const;
 
     // Stream attributes that have client data
-    gl::Error streamAttributes(const gl::AttributesMask &activeAttributesMask,
+    gl::Error streamAttributes(const gl::AttributesMask &attribsToStream,
                                GLsizei instanceCount,
                                const gl::IndexRange &indexRange) const;
+    void syncDirtyAttrib(const gl::Context *context,
+                         size_t attribIndex,
+                         const gl::VertexArray::DirtyAttribBits &dirtyAttribBits);
+    void syncDirtyBinding(const gl::Context *context,
+                          size_t bindingIndex,
+                          const gl::VertexArray::DirtyBindingBits &dirtyBindingBits);
 
     void updateNeedsStreaming(size_t attribIndex);
     void updateAttribEnabled(size_t attribIndex);
@@ -91,6 +101,8 @@ class VertexArrayGL : public VertexArrayImpl
     void updateAttribBinding(size_t attribIndex);
     void updateBindingBuffer(const gl::Context *context, size_t bindingIndex);
     void updateBindingDivisor(size_t bindingIndex);
+
+    void updateElementArrayBufferBinding(const gl::Context *context) const;
 
     void callVertexAttribPointer(GLuint attribIndex,
                                  const gl::VertexAttribute &attrib,
@@ -113,9 +125,7 @@ class VertexArrayGL : public VertexArrayImpl
 
     mutable size_t mStreamingArrayBufferSize;
     mutable GLuint mStreamingArrayBuffer;
-
-    gl::AttributesMask mAttributesNeedStreaming;
 };
-}
+}  // namespace rx
 
 #endif  // LIBANGLE_RENDERER_GL_VERTEXARRAYGL_H_

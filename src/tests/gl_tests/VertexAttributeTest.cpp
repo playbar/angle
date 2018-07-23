@@ -163,11 +163,7 @@ class VertexAttributeTest : public ANGLETest
     void runTest(const TestData &test, bool checkPixelEqual)
     {
         // TODO(geofflang): Figure out why this is broken on AMD OpenGL
-        if (IsAMD() && getPlatformRenderer() == EGL_PLATFORM_ANGLE_TYPE_OPENGL_ANGLE)
-        {
-            std::cout << "Test skipped on AMD OpenGL." << std::endl;
-            return;
-        }
+        ANGLE_SKIP_TEST_IF(IsAMD() && IsOpenGL());
 
         for (GLint i = 0; i < 4; i++)
         {
@@ -699,12 +695,8 @@ TEST_P(VertexAttributeTestES3, VertexArrayObjectRendering)
 // Validate that we can support GL_MAX_ATTRIBS attribs
 TEST_P(VertexAttributeTest, MaxAttribs)
 {
-    // TODO(jmadill): Figure out why we get this error on AMD/OpenGL and Intel.
-    if ((IsIntel() || IsAMD()) && GetParam().getRenderer() == EGL_PLATFORM_ANGLE_TYPE_OPENGL_ANGLE)
-    {
-        std::cout << "Test skipped on Intel and AMD." << std::endl;
-        return;
-    }
+    // TODO(jmadill): Figure out why we get this error on AMD/OpenGL.
+    ANGLE_SKIP_TEST_IF(IsAMD() && IsOpenGL());
 
     GLint maxAttribs;
     glGetIntegerv(GL_MAX_VERTEX_ATTRIBS, &maxAttribs);
@@ -727,11 +719,7 @@ TEST_P(VertexAttributeTest, MaxAttribs)
 TEST_P(VertexAttributeTest, MaxAttribsPlusOne)
 {
     // TODO(jmadill): Figure out why we get this error on AMD/ES2/OpenGL
-    if (IsAMD() && GetParam() == ES2_OPENGL())
-    {
-        std::cout << "Test disabled on AMD/ES2/OpenGL" << std::endl;
-        return;
-    }
+    ANGLE_SKIP_TEST_IF(IsAMD() && GetParam() == ES2_OPENGL());
 
     GLint maxAttribs;
     glGetIntegerv(GL_MAX_VERTEX_ATTRIBS, &maxAttribs);
@@ -747,13 +735,6 @@ TEST_P(VertexAttributeTest, MaxAttribsPlusOne)
 // Simple test for when we use glBindAttribLocation
 TEST_P(VertexAttributeTest, SimpleBindAttribLocation)
 {
-    // TODO(jmadill): Figure out why this fails on Intel.
-    if (IsIntel() && GetParam().getRenderer() == EGL_PLATFORM_ANGLE_TYPE_OPENGL_ANGLE)
-    {
-        std::cout << "Test skipped on Intel." << std::endl;
-        return;
-    }
-
     // Re-use the multi-attrib program, binding attribute 0
     GLuint program = compileMultiAttribProgram(1);
     glBindAttribLocation(program, 2, "position");
@@ -785,12 +766,8 @@ TEST_P(VertexAttributeTest, DrawArraysBufferTooSmall)
 // Verify that index draw with an out-of-range offset generates INVALID_OPERATION.
 TEST_P(VertexAttributeTest, DrawElementsBufferTooSmall)
 {
-    if (extensionEnabled("GL_KHR_robust_buffer_access_behavior"))
-    {
-        std::cout << "Test skipped due to supporting GL_KHR_robust_buffer_access_behavior"
-                  << std::endl;
-        return;
-    }
+    // Test skipped due to supporting GL_KHR_robust_buffer_access_behavior
+    ANGLE_SKIP_TEST_IF(extensionEnabled("GL_KHR_robust_buffer_access_behavior"));
 
     std::array<GLfloat, kVertexCount> inputData;
     std::array<GLfloat, kVertexCount> expectedData;
@@ -808,18 +785,10 @@ TEST_P(VertexAttributeTest, DrawElementsBufferTooSmall)
 TEST_P(VertexAttributeTest, DrawArraysWithBufferOffset)
 {
     // TODO(jmadill): Diagnose this failure.
-    if (IsD3D11_FL93())
-    {
-        std::cout << "Test disabled on D3D11 FL 9_3" << std::endl;
-        return;
-    }
+    ANGLE_SKIP_TEST_IF(IsD3D11_FL93());
 
     // TODO(geofflang): Figure out why this is broken on AMD OpenGL
-    if (IsAMD() && getPlatformRenderer() == EGL_PLATFORM_ANGLE_TYPE_OPENGL_ANGLE)
-    {
-        std::cout << "Test skipped on AMD OpenGL." << std::endl;
-        return;
-    }
+    ANGLE_SKIP_TEST_IF(IsAMD() && IsOpenGL());
 
     initBasicProgram();
     glUseProgram(mProgram);
@@ -1042,29 +1011,29 @@ class VertexAttributeTestES31 : public VertexAttributeTestES3
         glDeleteVertexArrays(1, &mVAO);
     }
 
-    void drawArraysWithStrideAndOffset(GLint stride, GLsizeiptr offset)
+    void drawArraysWithStrideAndRelativeOffset(GLint stride, GLuint relativeOffset)
     {
         initTest();
 
-        GLint floatStride      = stride ? (stride / kFloatStride) : 1;
-        GLsizeiptr floatOffset = offset / kFloatStride;
-        size_t floatCount      = static_cast<size_t>(floatOffset) + kVertexCount * floatStride;
+        GLint floatStride          = std::max(stride / kFloatStride, 1);
+        GLuint floatRelativeOffset = relativeOffset / kFloatStride;
+        size_t floatCount = static_cast<size_t>(floatRelativeOffset) + kVertexCount * floatStride;
         GLsizeiptr inputSize   = static_cast<GLsizeiptr>(floatCount) * kFloatStride;
 
         std::vector<GLfloat> inputData(floatCount);
         for (size_t count = 0; count < kVertexCount; ++count)
         {
-            inputData[floatOffset + count * floatStride] = static_cast<GLfloat>(count);
+            inputData[floatRelativeOffset + count * floatStride] = static_cast<GLfloat>(count);
         }
 
         // Ensure inputSize, inputStride and inputOffset are multiples of TypeStride(GL_FLOAT).
-        GLsizei inputStride    = stride ? floatStride * kFloatStride : 0;
-        GLsizeiptr inputOffset = floatOffset * kFloatStride;
+        GLsizei inputStride            = floatStride * kFloatStride;
+        GLsizeiptr inputRelativeOffset = floatRelativeOffset * kFloatStride;
         glBindBuffer(GL_ARRAY_BUFFER, mBuffer);
         glBufferData(GL_ARRAY_BUFFER, inputSize, nullptr, GL_STATIC_DRAW);
         glBufferSubData(GL_ARRAY_BUFFER, 0, inputSize, inputData.data());
-        glVertexAttribPointer(mTestAttrib, 1, GL_FLOAT, GL_FALSE, inputStride,
-                              reinterpret_cast<const void *>(inputOffset));
+        glVertexAttribFormat(mTestAttrib, 1, GL_FLOAT, GL_FALSE, inputRelativeOffset);
+        glBindVertexBuffer(mTestAttrib, mBuffer, 0, inputStride);
         glEnableVertexAttribArray(mTestAttrib);
 
         glDrawArrays(GL_TRIANGLES, 0, 6);
@@ -1073,13 +1042,54 @@ class VertexAttributeTestES31 : public VertexAttributeTestES3
         EXPECT_GL_NO_ERROR();
     }
 
+    void initOnlyUpdateBindingTest(GLint bindingToUpdate)
+    {
+        initTest();
+
+        constexpr GLuint kTestFloatOffset1                               = kVertexCount;
+        std::array<GLfloat, kTestFloatOffset1 + kVertexCount> inputData1 = {};
+        for (size_t count = 0; count < kVertexCount; ++count)
+        {
+            GLfloat value                         = static_cast<GLfloat>(count);
+            inputData1[kTestFloatOffset1 + count] = value;
+        }
+
+        GLBuffer testBuffer1;
+        glBindBuffer(GL_ARRAY_BUFFER, testBuffer1);
+        glBufferData(GL_ARRAY_BUFFER, inputData1.size() * kFloatStride, inputData1.data(),
+                     GL_STATIC_DRAW);
+
+        ASSERT_NE(bindingToUpdate, mTestAttrib);
+        ASSERT_NE(bindingToUpdate, mExpectedAttrib);
+
+        // Set mTestAttrib using the binding bindingToUpdate.
+        glVertexAttribFormat(mTestAttrib, 1, GL_FLOAT, GL_FALSE, 0);
+        glBindVertexBuffer(bindingToUpdate, testBuffer1, kTestFloatOffset1 * kFloatStride,
+                           kFloatStride);
+        glVertexAttribBinding(mTestAttrib, bindingToUpdate);
+        glEnableVertexAttribArray(mTestAttrib);
+
+        // In the first draw the current VAO states are set to driver.
+        glDrawArrays(GL_TRIANGLES, 0, 6);
+        checkPixels();
+        EXPECT_GL_NO_ERROR();
+
+        // We need the second draw to ensure all VAO dirty bits are reset.
+        // e.g. On D3D11 back-ends, Buffer11::resize is called in the first draw, where the related
+        // binding is set to dirty again.
+        glDrawArrays(GL_TRIANGLES, 0, 6);
+        checkPixels();
+        EXPECT_GL_NO_ERROR();
+    }
+
     GLuint mVAO;
     GLuint mExpectedBuffer;
 
     const GLsizei kFloatStride = TypeStride(GL_FLOAT);
 
-    // Set the maximum value for stride if the stride is too large.
-    static constexpr GLint MAX_STRIDE_FOR_TEST = 4095;
+    // Set the maximum value for stride and relativeOffset in case they are too large.
+    const GLint MAX_STRIDE_FOR_TEST          = 4095;
+    const GLint MAX_RELATIVE_OFFSET_FOR_TEST = 4095;
 };
 
 // Verify that MAX_VERTEX_ATTRIB_STRIDE is no less than the minimum required value (2048) in ES3.1.
@@ -1111,20 +1121,24 @@ TEST_P(VertexAttributeTestES31, DrawArraysWithLargeStride)
     glGetIntegerv(GL_MAX_VERTEX_ATTRIB_STRIDE, &maxStride);
     ASSERT_GL_NO_ERROR();
 
-    GLint largeStride = (maxStride < MAX_STRIDE_FOR_TEST) ? maxStride : MAX_STRIDE_FOR_TEST;
-    drawArraysWithStrideAndOffset(largeStride, 0);
+    GLint largeStride = std::min(maxStride, MAX_STRIDE_FOR_TEST);
+    drawArraysWithStrideAndRelativeOffset(largeStride, 0);
 }
 
-// TODO(jiawei.shao@intel.com): Merge it into VertexAttributeTestES31 when Vertex Attrib
-// Binding is supported on D3D11 back-ends.
-class VertexAttributeTestES31_OpenGL : public VertexAttributeTestES31
+// Verify using MAX_VERTEX_ATTRIB_RELATIVE_OFFSET as relativeOffset doesn't mess up the draw.
+// Use default value if the value of MAX_VERTEX_ATTRIB_RELATIVE_OFFSSET is too large for this test.
+TEST_P(VertexAttributeTestES31, DrawArraysWithLargeRelativeOffset)
 {
-  protected:
-    VertexAttributeTestES31_OpenGL() {}
-};
+    GLint maxRelativeOffset;
+    glGetIntegerv(GL_MAX_VERTEX_ATTRIB_RELATIVE_OFFSET, &maxRelativeOffset);
+    ASSERT_GL_NO_ERROR();
+
+    GLint largeRelativeOffset = std::min(maxRelativeOffset, MAX_RELATIVE_OFFSET_FOR_TEST);
+    drawArraysWithStrideAndRelativeOffset(0, largeRelativeOffset);
+}
 
 // Verify that using VertexAttribBinding after VertexAttribPointer won't mess up the draw.
-TEST_P(VertexAttributeTestES31_OpenGL, ChangeAttribBindingAfterVertexAttribPointer)
+TEST_P(VertexAttributeTestES31, ChangeAttribBindingAfterVertexAttribPointer)
 {
     initTest();
 
@@ -1174,7 +1188,7 @@ TEST_P(VertexAttributeTestES31_OpenGL, ChangeAttribBindingAfterVertexAttribPoint
 }
 
 // Verify that using VertexAttribFormat after VertexAttribPointer won't mess up the draw.
-TEST_P(VertexAttributeTestES31_OpenGL, ChangeAttribFormatAfterVertexAttribPointer)
+TEST_P(VertexAttributeTestES31, ChangeAttribFormatAfterVertexAttribPointer)
 {
     initTest();
 
@@ -1196,6 +1210,81 @@ TEST_P(VertexAttributeTestES31_OpenGL, ChangeAttribFormatAfterVertexAttribPointe
 
     // Call VertexAttribFormat on mTestAttrib to modify the relativeOffset to kOffset.
     glVertexAttribFormat(mTestAttrib, 1, GL_FLOAT, GL_FALSE, kOffset);
+
+    glDrawArrays(GL_TRIANGLES, 0, 6);
+    checkPixels();
+    EXPECT_GL_NO_ERROR();
+}
+
+// Verify that only updating a binding without updating the bound format won't mess up this draw.
+TEST_P(VertexAttributeTestES31, OnlyUpdateBindingByBindVertexBuffer)
+{
+    // Default binding index for test
+    constexpr GLint kTestBinding = 10;
+    initOnlyUpdateBindingTest(kTestBinding);
+
+    constexpr GLuint kTestFloatOffset2                               = kVertexCount * 2;
+    std::array<GLfloat, kVertexCount> expectedData2                  = {};
+    std::array<GLfloat, kTestFloatOffset2 + kVertexCount> inputData2 = {};
+    for (size_t count = 0; count < kVertexCount; ++count)
+    {
+        GLfloat value2                        = static_cast<GLfloat>(count) * 2;
+        expectedData2[count]                  = value2;
+        inputData2[count + kTestFloatOffset2] = value2;
+    }
+
+    // Set another set of data for mExpectedAttrib.
+    GLBuffer expectedBuffer2;
+    glBindBuffer(GL_ARRAY_BUFFER, expectedBuffer2);
+    glBufferData(GL_ARRAY_BUFFER, expectedData2.size() * kFloatStride, expectedData2.data(),
+                 GL_STATIC_DRAW);
+    glVertexAttribPointer(mExpectedAttrib, 1, GL_FLOAT, GL_FALSE, 0, nullptr);
+
+    GLBuffer testBuffer2;
+    glBindBuffer(GL_ARRAY_BUFFER, testBuffer2);
+    glBufferData(GL_ARRAY_BUFFER, inputData2.size() * kFloatStride, inputData2.data(),
+                 GL_STATIC_DRAW);
+
+    // Only update the binding kTestBinding in the second draw by BindVertexBuffer.
+    glBindVertexBuffer(kTestBinding, testBuffer2, kTestFloatOffset2 * kFloatStride, kFloatStride);
+
+    glDrawArrays(GL_TRIANGLES, 0, 6);
+    checkPixels();
+    EXPECT_GL_NO_ERROR();
+}
+
+// Verify that only updating a binding without updating the bound format won't mess up this draw.
+TEST_P(VertexAttributeTestES31, OnlyUpdateBindingByVertexAttribPointer)
+{
+    // Default binding index for test
+    constexpr GLint kTestBinding = 10;
+    initOnlyUpdateBindingTest(kTestBinding);
+
+    constexpr GLuint kTestFloatOffset2                               = kVertexCount * 3;
+    std::array<GLfloat, kVertexCount> expectedData2                  = {};
+    std::array<GLfloat, kTestFloatOffset2 + kVertexCount> inputData2 = {};
+    for (size_t count = 0; count < kVertexCount; ++count)
+    {
+        GLfloat value2                        = static_cast<GLfloat>(count) * 3;
+        expectedData2[count]                  = value2;
+        inputData2[count + kTestFloatOffset2] = value2;
+    }
+
+    // Set another set of data for mExpectedAttrib.
+    GLBuffer expectedBuffer2;
+    glBindBuffer(GL_ARRAY_BUFFER, expectedBuffer2);
+    glBufferData(GL_ARRAY_BUFFER, expectedData2.size() * kFloatStride, expectedData2.data(),
+                 GL_STATIC_DRAW);
+    glVertexAttribPointer(mExpectedAttrib, 1, GL_FLOAT, GL_FALSE, 0, nullptr);
+
+    GLBuffer testBuffer2;
+    glBindBuffer(GL_ARRAY_BUFFER, testBuffer2);
+    glBufferData(GL_ARRAY_BUFFER, inputData2.size() * kFloatStride, inputData2.data(),
+                 GL_STATIC_DRAW);
+
+    // Only update the binding kTestBinding in the second draw by VertexAttribPointer.
+    glVertexAttribPointer(kTestBinding, 1, GL_FLOAT, GL_FALSE, 0,
+                          reinterpret_cast<const void *>(kTestFloatOffset2 * kFloatStride));
 
     glDrawArrays(GL_TRIANGLES, 0, 6);
     checkPixels();
@@ -1377,11 +1466,7 @@ void VertexAttributeCachingTest::SetUp()
 // to stress-test the caching code.
 TEST_P(VertexAttributeCachingTest, BufferMulticaching)
 {
-    if (IsAMD() && IsDesktopOpenGL())
-    {
-        std::cout << "Test skipped on AMD OpenGL." << std::endl;
-        return;
-    }
+    ANGLE_SKIP_TEST_IF(IsAMD() && IsDesktopOpenGL());
 
     initBasicProgram();
 
@@ -1415,11 +1500,7 @@ TEST_P(VertexAttributeCachingTest, BufferMulticaching)
 // after enough iterations. It validates the unchanged attributes don't get deleted incidentally.
 TEST_P(VertexAttributeCachingTest, BufferMulticachingWithOneUnchangedAttrib)
 {
-    if (IsAMD() && IsDesktopOpenGL())
-    {
-        std::cout << "Test skipped on AMD OpenGL." << std::endl;
-        return;
-    }
+    ANGLE_SKIP_TEST_IF(IsAMD() && IsDesktopOpenGL());
 
     initDoubleAttribProgram();
 
@@ -1462,6 +1543,87 @@ TEST_P(VertexAttributeCachingTest, BufferMulticachingWithOneUnchangedAttrib)
     }
 }
 
+// Tests that repeatedly updating a disabled vertex attribute works as expected.
+// This covers an ANGLE bug where dirty bits for current values were ignoring repeated updates.
+TEST_P(VertexAttributeTest, DisabledAttribUpdates)
+{
+    constexpr char kVertexShader[] = R"(attribute vec2 position;
+attribute float actualValue;
+uniform float expectedValue;
+varying float result;
+void main()
+{
+    result = (actualValue == expectedValue) ? 1.0 : 0.0;
+    gl_Position = vec4(position, 0, 1);
+})";
+
+    constexpr char kFragmentShader[] = R"(varying mediump float result;
+void main()
+{
+    gl_FragColor = result > 0.0 ? vec4(0, 1, 0, 1) : vec4(1, 0, 0, 1);
+})";
+
+    ANGLE_GL_PROGRAM(program, kVertexShader, kFragmentShader);
+
+    glUseProgram(program);
+    GLint attribLoc = glGetAttribLocation(program, "actualValue");
+    ASSERT_NE(-1, attribLoc);
+
+    GLint uniLoc = glGetUniformLocation(program, "expectedValue");
+    ASSERT_NE(-1, uniLoc);
+
+    glVertexAttribPointer(attribLoc, 1, GL_FLOAT, GL_FALSE, 0, nullptr);
+
+    GLint positionLocation = glGetAttribLocation(program, "position");
+    ASSERT_NE(-1, positionLocation);
+    setupQuadVertexBuffer(0.5f, 1.0f);
+    glVertexAttribPointer(positionLocation, 3, GL_FLOAT, GL_FALSE, 0, 0);
+    glEnableVertexAttribArray(positionLocation);
+
+    std::array<GLfloat, 4> testValues = {{1, 2, 3, 4}};
+    for (GLfloat testValue : testValues)
+    {
+        glUniform1f(uniLoc, testValue);
+        glVertexAttrib1f(attribLoc, testValue);
+        glDrawArrays(GL_TRIANGLES, 0, 6);
+        ASSERT_GL_NO_ERROR();
+        EXPECT_PIXEL_COLOR_EQ(0, 0, GLColor::green);
+    }
+}
+
+// Test that even inactive attributes are taken into account when checking for aliasing in case the
+// shader version is >= 3.00. GLSL ES 3.00.6 section 12.46.
+TEST_P(VertexAttributeTestES3, InactiveAttributeAliasing)
+{
+    const std::string &vertexShader =
+        R"(#version 300 es
+        precision mediump float;
+        in vec4 input_active;
+        in vec4 input_unused;
+        void main()
+        {
+            gl_Position = input_active;
+        })";
+
+    const std::string &fragmentShader =
+        R"(#version 300 es
+        precision mediump float;
+        out vec4 color;
+        void main()
+        {
+            color = vec4(0.0);
+        })";
+
+    ANGLE_GL_PROGRAM(program, vertexShader, fragmentShader);
+    glBindAttribLocation(program, 0, "input_active");
+    glBindAttribLocation(program, 0, "input_unused");
+    glLinkProgram(program);
+    EXPECT_GL_NO_ERROR();
+    GLint linkStatus = 0;
+    glGetProgramiv(program, GL_LINK_STATUS, &linkStatus);
+    EXPECT_GL_FALSE(linkStatus);
+}
+
 // Use this to select which configurations (e.g. which renderer, which GLES major version) these
 // tests should be run against.
 // D3D11 Feature Level 9_3 uses different D3D formats for vertex attribs compared to Feature Levels
@@ -1478,8 +1640,6 @@ ANGLE_INSTANTIATE_TEST(VertexAttributeTest,
 ANGLE_INSTANTIATE_TEST(VertexAttributeTestES3, ES3_D3D11(), ES3_OPENGL(), ES3_OPENGLES());
 
 ANGLE_INSTANTIATE_TEST(VertexAttributeTestES31, ES31_D3D11(), ES31_OPENGL(), ES31_OPENGLES());
-
-ANGLE_INSTANTIATE_TEST(VertexAttributeTestES31_OpenGL, ES31_OPENGL(), ES31_OPENGLES());
 
 ANGLE_INSTANTIATE_TEST(VertexAttributeCachingTest,
                        ES2_D3D9(),

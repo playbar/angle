@@ -42,18 +42,18 @@ void BitSetIteratorPerfTest<T>::step()
 
     for (size_t bit : mBits)
     {
-        UNUSED_VARIABLE(bit);
+        ANGLE_UNUSED_VARIABLE(bit);
     }
 
     mBits.reset();
 }
 
 // These type names unfortunately don't get printed correctly in Gtest.
-#if defined(ANGLE_X64_CPU)
+#if defined(ANGLE_IS_64_BIT_CPU)
 using TestTypes = Types<angle::IterableBitSet<32>, angle::BitSet32<32>, angle::BitSet64<32>>;
 #else
 using TestTypes = Types<angle::IterableBitSet<32>, angle::BitSet32<32>>;
-#endif  // defined(ANGLE_X64_CPU)
+#endif  // defined(ANGLE_IS_64_BIT_CPU)
 TYPED_TEST_CASE(BitSetIteratorPerfTest, TestTypes);
 
 TYPED_TEST(BitSetIteratorPerfTest, Run)

@@ -7,6 +7,9 @@
 #include "PreprocessorTest.h"
 #include "compiler/preprocessor/Token.h"
 
+namespace angle
+{
+
 class LocationTest : public PreprocessorTest
 {
 protected:
@@ -270,9 +273,9 @@ TEST_F(LocationTest, LineDirectiveMissingNewline)
 // Test for an error being generated when the line number overflows - regular version
 TEST_F(LocationTest, LineOverflowRegular)
 {
-    const char *str = "#line 2147483647\n\n";
+    const char *str = "#line 0x7FFFFFFF\n\n";
 
-    ASSERT_TRUE(mPreprocessor.init(1, &str, NULL));
+    ASSERT_TRUE(mPreprocessor.init(1, &str, nullptr));
 
     using testing::_;
     // Error reported about EOF.
@@ -285,9 +288,41 @@ TEST_F(LocationTest, LineOverflowRegular)
 // Test for an error being generated when the line number overflows - inside /* */ comment version
 TEST_F(LocationTest, LineOverflowInComment)
 {
-    const char *str = "#line 2147483647\n/*\n*/";
+    const char *str = "#line 0x7FFFFFFF\n/*\n*/";
 
-    ASSERT_TRUE(mPreprocessor.init(1, &str, NULL));
+    ASSERT_TRUE(mPreprocessor.init(1, &str, nullptr));
+
+    using testing::_;
+    // Error reported about EOF.
+    EXPECT_CALL(mDiagnostics, print(pp::Diagnostics::PP_TOKENIZER_ERROR, _, _));
+
+    pp::Token token;
+    mPreprocessor.lex(&token);
+}
+
+// Test for an error being generated when the line number overflows - inside \n continuation
+// version
+TEST_F(LocationTest, LineOverflowInContinuationN)
+{
+    const char *str = "#line 0x7FFFFFFF\n \\\n\n";
+
+    ASSERT_TRUE(mPreprocessor.init(1, &str, nullptr));
+
+    using testing::_;
+    // Error reported about EOF.
+    EXPECT_CALL(mDiagnostics, print(pp::Diagnostics::PP_TOKENIZER_ERROR, _, _));
+
+    pp::Token token;
+    mPreprocessor.lex(&token);
+}
+
+// Test for an error being generated when the line number overflows - inside \r\n continuation
+// version
+TEST_F(LocationTest, LineOverflowInContinuationRN)
+{
+    const char *str = "#line 0x7FFFFFFF\n \\\r\n\n";
+
+    ASSERT_TRUE(mPreprocessor.init(1, &str, nullptr));
 
     using testing::_;
     // Error reported about EOF.
@@ -379,3 +414,5 @@ static const LineExpressionTestParam kParamsLineExpressionTest[] = {
     {"16 >> 2", 4}};
 
 INSTANTIATE_TEST_CASE_P(All, LineExpressionTest, testing::ValuesIn(kParamsLineExpressionTest));
+
+}  // namespace angle

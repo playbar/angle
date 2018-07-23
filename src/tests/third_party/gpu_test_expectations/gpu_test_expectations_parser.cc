@@ -74,6 +74,7 @@ enum Token {
   kConfigMacYosemite,
   kConfigMacElCapitan,
   kConfigMacSierra,
+  kConfigMacHighSierra,
   kConfigMac,
   kConfigLinux,
   kConfigChromeOS,
@@ -91,6 +92,7 @@ enum Token {
   kConfigD3D11,
   kConfigGLDesktop,
   kConfigGLES,
+  kConfigVulkan,
   // expectation
   kExpectationPass,
   kExpectationFail,
@@ -129,6 +131,7 @@ const TokenInfo kTokenData[] = {
     {"yosemite", GPUTestConfig::kOsMacYosemite},
     {"elcapitan", GPUTestConfig::kOsMacElCapitan},
     {"sierra", GPUTestConfig::kOsMacSierra},
+    {"highsierra", GPUTestConfig::kOsMacHighSierra},
     {"mac", GPUTestConfig::kOsMac},
     {"linux", GPUTestConfig::kOsLinux},
     {"chromeos", GPUTestConfig::kOsChromeOS},
@@ -143,6 +146,7 @@ const TokenInfo kTokenData[] = {
     {"d3d11", GPUTestConfig::kAPID3D11},
     {"opengl", GPUTestConfig::kAPIGLDesktop},
     {"gles", GPUTestConfig::kAPIGLES},
+    {"vulkan", GPUTestConfig::kAPIVulkan},
     {"pass", GPUTestExpectationsParser::kGpuTestPass},
     {"fail", GPUTestExpectationsParser::kGpuTestFail},
     {"flaky", GPUTestExpectationsParser::kGpuTestFlaky},
@@ -292,6 +296,7 @@ bool GPUTestExpectationsParser::ParseConfig(
       case kConfigMacYosemite:
       case kConfigMacElCapitan:
       case kConfigMacSierra:
+      case kConfigMacHighSierra:
       case kConfigMac:
       case kConfigLinux:
       case kConfigChromeOS:
@@ -306,6 +311,7 @@ bool GPUTestExpectationsParser::ParseConfig(
       case kConfigD3D11:
       case kConfigGLDesktop:
       case kConfigGLES:
+      case kConfigVulkan:
       case kConfigGPUDeviceID:
         if (token == kConfigGPUDeviceID) {
           if (!UpdateTestConfig(config, tokens[i], 0))
@@ -352,6 +358,7 @@ bool GPUTestExpectationsParser::ParseLine(
       case kConfigMacYosemite:
       case kConfigMacElCapitan:
       case kConfigMacSierra:
+      case kConfigMacHighSierra:
       case kConfigMac:
       case kConfigLinux:
       case kConfigChromeOS:
@@ -366,6 +373,7 @@ bool GPUTestExpectationsParser::ParseLine(
       case kConfigD3D11:
       case kConfigGLDesktop:
       case kConfigGLES:
+      case kConfigVulkan:
       case kConfigGPUDeviceID:
         // MODIFIERS, could be in any order, need at least one.
         if (stage != kLineParserConfigs && stage != kLineParserBugID) {
@@ -475,6 +483,7 @@ bool GPUTestExpectationsParser::UpdateTestConfig(GPUTestConfig* config,
     case kConfigMacYosemite:
     case kConfigMacElCapitan:
     case kConfigMacSierra:
+    case kConfigMacHighSierra:
     case kConfigMac:
     case kConfigLinux:
     case kConfigChromeOS:
@@ -518,6 +527,7 @@ bool GPUTestExpectationsParser::UpdateTestConfig(GPUTestConfig* config,
     case kConfigD3D11:
     case kConfigGLDesktop:
     case kConfigGLES:
+    case kConfigVulkan:
       if ((config->api() & kTokenData[token].flag) != 0) {
         PushErrorMessage(kErrorMessage[kErrorEntryWithAPIConflicts],
                          line_number);

@@ -20,9 +20,7 @@ class WindowSurfaceEGL : public SurfaceEGL
     WindowSurfaceEGL(const egl::SurfaceState &state,
                      const FunctionsEGL *egl,
                      EGLConfig config,
-                     EGLNativeWindowType window,
-                     const std::vector<EGLint> &attribList,
-                     RendererGL *renderer);
+                     EGLNativeWindowType window);
     ~WindowSurfaceEGL() override;
 
     egl::Error initialize(const egl::Display *display) override;

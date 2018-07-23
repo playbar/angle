@@ -40,7 +40,7 @@ void ClearMultiviewGL::clearMultiviewFBO(const gl::FramebufferState &state,
                                          GLfloat depth,
                                          GLint stencil)
 {
-    const auto &firstAttachment = state.getFirstNonNullAttachment();
+    const gl::FramebufferAttachment *firstAttachment = state.getFirstNonNullAttachment();
     switch (firstAttachment->getMultiviewLayout())
     {
         case GL_FRAMEBUFFER_MULTIVIEW_LAYERED_ANGLE:
@@ -69,7 +69,7 @@ void ClearMultiviewGL::clearLayeredFBO(const gl::FramebufferState &state,
 
     mStateManager->bindFramebuffer(GL_DRAW_FRAMEBUFFER, mFramebuffer);
 
-    const auto &firstAttachment = state.getFirstNonNullAttachment();
+    const gl::FramebufferAttachment *firstAttachment = state.getFirstNonNullAttachment();
     ASSERT(firstAttachment->getMultiviewLayout() == GL_FRAMEBUFFER_MULTIVIEW_LAYERED_ANGLE);
 
     const auto &drawBuffers = state.getDrawBufferStates();
@@ -97,7 +97,7 @@ void ClearMultiviewGL::clearSideBySideFBO(const gl::FramebufferState &state,
                                           GLfloat depth,
                                           GLint stencil)
 {
-    const auto &firstAttachment = state.getFirstNonNullAttachment();
+    const gl::FramebufferAttachment *firstAttachment = state.getFirstNonNullAttachment();
     ASSERT(firstAttachment->getMultiviewLayout() == GL_FRAMEBUFFER_MULTIVIEW_SIDE_BY_SIDE_ANGLE);
 
     const auto &viewportOffsets = firstAttachment->getMultiviewViewportOffsets();
@@ -147,51 +147,55 @@ void ClearMultiviewGL::attachTextures(const gl::FramebufferState &state, int lay
 {
     for (auto drawBufferId : state.getEnabledDrawBuffers())
     {
-        const auto &attachment = state.getColorAttachment(drawBufferId);
+        const gl::FramebufferAttachment *attachment = state.getColorAttachment(drawBufferId);
         if (attachment == nullptr)
         {
             continue;
         }
 
         const auto &imageIndex = attachment->getTextureImageIndex();
-        ASSERT(imageIndex.type == GL_TEXTURE_2D_ARRAY);
+        ASSERT(imageIndex.getType() == gl::TextureType::_2DArray);
 
         GLenum colorAttachment =
             static_cast<GLenum>(GL_COLOR_ATTACHMENT0 + static_cast<int>(drawBufferId));
         const TextureGL *textureGL = GetImplAs<TextureGL>(attachment->getTexture());
         mFunctions->framebufferTextureLayer(GL_DRAW_FRAMEBUFFER, colorAttachment,
-                                            textureGL->getTextureID(), imageIndex.mipIndex, layer);
+                                            textureGL->getTextureID(), imageIndex.getLevelIndex(),
+                                            layer);
     }
 
-    const auto &depthStencilAttachment = state.getDepthStencilAttachment();
-    const auto &depthAttachment        = state.getDepthAttachment();
-    const auto &stencilAttachment      = state.getStencilAttachment();
+    const gl::FramebufferAttachment *depthStencilAttachment = state.getDepthStencilAttachment();
+    const gl::FramebufferAttachment *depthAttachment        = state.getDepthAttachment();
+    const gl::FramebufferAttachment *stencilAttachment      = state.getStencilAttachment();
     if (depthStencilAttachment != nullptr)
     {
         const auto &imageIndex = depthStencilAttachment->getTextureImageIndex();
-        ASSERT(imageIndex.type == GL_TEXTURE_2D_ARRAY);
+        ASSERT(imageIndex.getType() == gl::TextureType::_2DArray);
 
         const TextureGL *textureGL = GetImplAs<TextureGL>(depthStencilAttachment->getTexture());
         mFunctions->framebufferTextureLayer(GL_DRAW_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT,
-                                            textureGL->getTextureID(), imageIndex.mipIndex, layer);
+                                            textureGL->getTextureID(), imageIndex.getLevelIndex(),
+                                            layer);
     }
     else if (depthAttachment != nullptr)
     {
         const auto &imageIndex = depthAttachment->getTextureImageIndex();
-        ASSERT(imageIndex.type == GL_TEXTURE_2D_ARRAY);
+        ASSERT(imageIndex.getType() == gl::TextureType::_2DArray);
 
         const TextureGL *textureGL = GetImplAs<TextureGL>(depthAttachment->getTexture());
         mFunctions->framebufferTextureLayer(GL_DRAW_FRAMEBUFFER, GL_DEPTH_ATTACHMENT,
-                                            textureGL->getTextureID(), imageIndex.mipIndex, layer);
+                                            textureGL->getTextureID(), imageIndex.getLevelIndex(),
+                                            layer);
     }
     else if (stencilAttachment != nullptr)
     {
         const auto &imageIndex = stencilAttachment->getTextureImageIndex();
-        ASSERT(imageIndex.type == GL_TEXTURE_2D_ARRAY);
+        ASSERT(imageIndex.getType() == gl::TextureType::_2DArray);
 
         const TextureGL *textureGL = GetImplAs<TextureGL>(stencilAttachment->getTexture());
         mFunctions->framebufferTextureLayer(GL_DRAW_FRAMEBUFFER, GL_STENCIL_ATTACHMENT,
-                                            textureGL->getTextureID(), imageIndex.mipIndex, layer);
+                                            textureGL->getTextureID(), imageIndex.getLevelIndex(),
+                                            layer);
     }
 }
 
@@ -199,7 +203,7 @@ void ClearMultiviewGL::detachTextures(const gl::FramebufferState &state)
 {
     for (auto drawBufferId : state.getEnabledDrawBuffers())
     {
-        const auto &attachment = state.getColorAttachment(drawBufferId);
+        const gl::FramebufferAttachment *attachment = state.getColorAttachment(drawBufferId);
         if (attachment == nullptr)
         {
             continue;
@@ -210,9 +214,9 @@ void ClearMultiviewGL::detachTextures(const gl::FramebufferState &state)
         mFunctions->framebufferTextureLayer(GL_DRAW_FRAMEBUFFER, colorAttachment, 0, 0, 0);
     }
 
-    const auto &depthStencilAttachment = state.getDepthStencilAttachment();
-    const auto &depthAttachment        = state.getDepthAttachment();
-    const auto &stencilAttachment      = state.getStencilAttachment();
+    const gl::FramebufferAttachment *depthStencilAttachment = state.getDepthStencilAttachment();
+    const gl::FramebufferAttachment *depthAttachment        = state.getDepthAttachment();
+    const gl::FramebufferAttachment *stencilAttachment      = state.getStencilAttachment();
     if (depthStencilAttachment != nullptr)
     {
         mFunctions->framebufferTextureLayer(GL_DRAW_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, 0, 0,

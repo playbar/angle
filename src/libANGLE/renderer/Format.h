@@ -12,17 +12,15 @@
 #ifndef LIBANGLE_RENDERER_FORMAT_H_
 #define LIBANGLE_RENDERER_FORMAT_H_
 
-#include "libANGLE/formatutils.h"
 #include "libANGLE/renderer/renderer_utils.h"
 
 namespace angle
 {
+enum class FormatID;
 
 struct Format final : private angle::NonCopyable
 {
-    enum class ID;
-
-    constexpr Format(ID id,
+    constexpr Format(FormatID id,
                      GLenum glFormat,
                      GLenum fboFormat,
                      rx::MipGenerationFunction mipGen,
@@ -35,12 +33,16 @@ struct Format final : private angle::NonCopyable
                      GLuint blueBits,
                      GLuint alphaBits,
                      GLuint depthBits,
-                     GLuint stencilBits);
+                     GLuint stencilBits,
+                     GLuint pixelBytes,
+                     bool isBlock);
 
-    static const Format &Get(ID id);
-    static ID InternalFormatToID(GLenum internalFormat);
+    static const Format &Get(FormatID id);
+    static FormatID InternalFormatToID(GLenum internalFormat);
 
-    ID id;
+    constexpr bool hasDepthOrStencilBits() const;
+
+    FormatID id;
 
     // The closest matching GL internal format for the storage this format uses. Note that this
     // may be a different internal format than the one this ANGLE format is used for.
@@ -66,9 +68,13 @@ struct Format final : private angle::NonCopyable
     GLuint alphaBits;
     GLuint depthBits;
     GLuint stencilBits;
+
+    GLuint pixelBytes;
+
+    bool isBlock;
 };
 
-constexpr Format::Format(ID id,
+constexpr Format::Format(FormatID id,
                          GLenum glFormat,
                          GLenum fboFormat,
                          rx::MipGenerationFunction mipGen,
@@ -81,7 +87,9 @@ constexpr Format::Format(ID id,
                          GLuint blueBits,
                          GLuint alphaBits,
                          GLuint depthBits,
-                         GLuint stencilBits)
+                         GLuint stencilBits,
+                         GLuint pixelBytes,
+                         bool isBlock)
     : id(id),
       glInternalFormat(glFormat),
       fboImplementationInternalFormat(fboFormat),
@@ -95,12 +103,18 @@ constexpr Format::Format(ID id,
       blueBits(blueBits),
       alphaBits(alphaBits),
       depthBits(depthBits),
-      stencilBits(stencilBits)
+      stencilBits(stencilBits),
+      pixelBytes(pixelBytes),
+      isBlock(isBlock)
 {
 }
 
+constexpr bool Format::hasDepthOrStencilBits() const
+{
+    return depthBits > 0 || stencilBits > 0;
+}
 }  // namespace angle
 
-#include "libANGLE/renderer/Format_ID_autogen.inl"
+#include "libANGLE/renderer/FormatID_autogen.inc"
 
 #endif  // LIBANGLE_RENDERER_FORMAT_H_

@@ -13,6 +13,7 @@
 #include "libANGLE/Framebuffer.h"
 #include "libANGLE/VertexArray.h"
 #include "libANGLE/validationES.h"
+#include "libANGLE/validationES2.h"
 #include "libANGLE/validationES3.h"
 
 #include "common/utilities.h"
@@ -61,8 +62,9 @@ bool ValidateProgramInterface(GLenum programInterface)
             ValidateNamedProgramInterface(programInterface));
 }
 
-bool ValidateProgramResourceProperty(GLenum prop)
+bool ValidateProgramResourceProperty(const Context *context, GLenum prop)
 {
+    ASSERT(context);
     switch (prop)
     {
         case GL_ACTIVE_VARIABLES:
@@ -95,6 +97,9 @@ bool ValidateProgramResourceProperty(GLenum prop)
 
         case GL_TYPE:
             return true;
+
+        case GL_REFERENCED_BY_GEOMETRY_SHADER_EXT:
+            return context->getExtensions().geometryShader;
 
         default:
             return false;
@@ -198,6 +203,7 @@ bool ValidateProgramResourcePropertyByInterface(GLenum prop, GLenum programInter
         case GL_REFERENCED_BY_VERTEX_SHADER:
         case GL_REFERENCED_BY_FRAGMENT_SHADER:
         case GL_REFERENCED_BY_COMPUTE_SHADER:
+        case GL_REFERENCED_BY_GEOMETRY_SHADER_EXT:
         {
             switch (programInterface)
             {
@@ -256,20 +262,100 @@ bool ValidateProgramResourceIndex(const Program *programObject,
         case GL_PROGRAM_OUTPUT:
             return (index < static_cast<GLuint>(programObject->getOutputResourceCount()));
 
-        // TODO(jie.a.chen@intel.com): more interfaces.
         case GL_UNIFORM:
-        case GL_UNIFORM_BLOCK:
-        case GL_TRANSFORM_FEEDBACK_VARYING:
+            return (index < static_cast<GLuint>(programObject->getActiveUniformCount()));
+
         case GL_BUFFER_VARIABLE:
+            return (index < static_cast<GLuint>(programObject->getActiveBufferVariableCount()));
+
         case GL_SHADER_STORAGE_BLOCK:
+            return (index < static_cast<GLuint>(programObject->getActiveShaderStorageBlockCount()));
+
+        case GL_UNIFORM_BLOCK:
+            return (index < programObject->getActiveUniformBlockCount());
+
         case GL_ATOMIC_COUNTER_BUFFER:
-            UNIMPLEMENTED();
-            return false;
+            return (index < programObject->getActiveAtomicCounterBufferCount());
+
+        case GL_TRANSFORM_FEEDBACK_VARYING:
+            return (index < static_cast<GLuint>(programObject->getTransformFeedbackVaryingCount()));
 
         default:
             UNREACHABLE();
             return false;
     }
+}
+
+bool ValidateProgramUniform(Context *context,
+                            GLenum valueType,
+                            GLuint program,
+                            GLint location,
+                            GLsizei count)
+{
+    // Check for ES31 program uniform entry points
+    if (context->getClientVersion() < Version(3, 1))
+    {
+        ANGLE_VALIDATION_ERR(context, InvalidOperation(), ES31Required);
+        return false;
+    }
+
+    const LinkedUniform *uniform = nullptr;
+    Program *programObject       = GetValidProgram(context, program);
+    return ValidateUniformCommonBase(context, programObject, location, count, &uniform) &&
+           ValidateUniformValue(context, valueType, uniform->type);
+}
+
+bool ValidateProgramUniformMatrix(Context *context,
+                                  GLenum valueType,
+                                  GLuint program,
+                                  GLint location,
+                                  GLsizei count,
+                                  GLboolean transpose)
+{
+    // Check for ES31 program uniform entry points
+    if (context->getClientVersion() < Version(3, 1))
+    {
+        ANGLE_VALIDATION_ERR(context, InvalidOperation(), ES31Required);
+        return false;
+    }
+
+    const LinkedUniform *uniform = nullptr;
+    Program *programObject       = GetValidProgram(context, program);
+    return ValidateUniformCommonBase(context, programObject, location, count, &uniform) &&
+           ValidateUniformMatrixValue(context, valueType, uniform->type);
+}
+
+bool ValidateVertexAttribFormatCommon(Context *context,
+                                      GLuint attribIndex,
+                                      GLint size,
+                                      GLenum type,
+                                      GLuint relativeOffset,
+                                      GLboolean pureInteger)
+{
+    if (context->getClientVersion() < ES_3_1)
+    {
+        ANGLE_VALIDATION_ERR(context, InvalidOperation(), ES31Required);
+        return false;
+    }
+
+    const Caps &caps = context->getCaps();
+    if (relativeOffset > static_cast<GLuint>(caps.maxVertexAttribRelativeOffset))
+    {
+        context->handleError(
+            InvalidValue()
+            << "relativeOffset cannot be greater than MAX_VERTEX_ATTRIB_RELATIVE_OFFSET.");
+        return false;
+    }
+
+    // [OpenGL ES 3.1] Section 10.3.1 page 243:
+    // An INVALID_OPERATION error is generated if the default vertex array object is bound.
+    if (context->getGLState().getVertexArrayId() == 0)
+    {
+        context->handleError(InvalidOperation() << "Default vertex array object is bound.");
+        return false;
+    }
+
+    return ValidateVertexFormatBase(context, attribIndex, size, type, pureInteger);
 }
 
 }  // anonymous namespace
@@ -308,20 +394,23 @@ bool ValidateGetBooleani_vRobustANGLE(Context *context,
         return false;
     }
 
-    if (!ValidateIndexedStateQuery(context, target, index, length))
+    GLsizei numParams = 0;
+
+    if (!ValidateIndexedStateQuery(context, target, index, &numParams))
     {
         return false;
     }
 
-    if (!ValidateRobustBufferSize(context, bufSize, *length))
+    if (!ValidateRobustBufferSize(context, bufSize, numParams))
     {
         return false;
     }
 
+    SetRobustLengthParam(length, numParams);
     return true;
 }
 
-bool ValidateDrawIndirectBase(Context *context, GLenum mode, const void *indirect)
+bool ValidateDrawIndirectBase(Context *context, PrimitiveMode mode, const void *indirect)
 {
     if (context->getClientVersion() < ES_3_1)
     {
@@ -345,7 +434,7 @@ bool ValidateDrawIndirectBase(Context *context, GLenum mode, const void *indirec
         return false;
     }
 
-    gl::Buffer *drawIndirectBuffer = state.getDrawIndirectBuffer();
+    Buffer *drawIndirectBuffer = state.getTargetBuffer(BufferBinding::DrawIndirect);
     if (!drawIndirectBuffer)
     {
         context->handleError(InvalidOperation() << "zero is bound to DRAW_INDIRECT_BUFFER");
@@ -379,22 +468,38 @@ bool ValidateDrawIndirectBase(Context *context, GLenum mode, const void *indirec
     return true;
 }
 
-bool ValidateDrawArraysIndirect(Context *context, GLenum mode, const void *indirect)
+bool ValidateDrawArraysIndirect(Context *context, PrimitiveMode mode, const void *indirect)
 {
-    const State &state                          = context->getGLState();
-    gl::TransformFeedback *curTransformFeedback = state.getCurrentTransformFeedback();
+    const State &state                      = context->getGLState();
+    TransformFeedback *curTransformFeedback = state.getCurrentTransformFeedback();
     if (curTransformFeedback && curTransformFeedback->isActive() &&
         !curTransformFeedback->isPaused())
     {
-        // An INVALID_OPERATION error is generated if transform feedback is active and not paused.
-        context->handleError(InvalidOperation() << "transform feedback is active and not paused.");
-        return false;
+        // EXT_geometry_shader allows transform feedback to work with all draw commands.
+        // [EXT_geometry_shader] Section 12.1, "Transform Feedback"
+        if (context->getExtensions().geometryShader)
+        {
+            if (!ValidateTransformFeedbackPrimitiveMode(
+                    context, curTransformFeedback->getPrimitiveMode(), mode))
+            {
+                ANGLE_VALIDATION_ERR(context, InvalidOperation(), InvalidDrawModeTransformFeedback);
+                return false;
+            }
+        }
+        else
+        {
+            // An INVALID_OPERATION error is generated if transform feedback is active and not
+            // paused.
+            ANGLE_VALIDATION_ERR(context, InvalidOperation(),
+                                 UnsupportedDrawModeForTransformFeedback);
+            return false;
+        }
     }
 
     if (!ValidateDrawIndirectBase(context, mode, indirect))
         return false;
 
-    gl::Buffer *drawIndirectBuffer = state.getDrawIndirectBuffer();
+    Buffer *drawIndirectBuffer = state.getTargetBuffer(BufferBinding::DrawIndirect);
     CheckedNumeric<size_t> checkedOffset(reinterpret_cast<size_t>(indirect));
     // In OpenGL ES3.1 spec, session 10.5, it defines the struct of DrawArraysIndirectCommand
     // which's size is 4 * sizeof(uint).
@@ -411,14 +516,19 @@ bool ValidateDrawArraysIndirect(Context *context, GLenum mode, const void *indir
     return true;
 }
 
-bool ValidateDrawElementsIndirect(Context *context, GLenum mode, GLenum type, const void *indirect)
+bool ValidateDrawElementsIndirect(Context *context,
+                                  PrimitiveMode mode,
+                                  GLenum type,
+                                  const void *indirect)
 {
-    if (!ValidateDrawElementsBase(context, type))
+    if (!ValidateDrawElementsBase(context, mode, type))
+    {
         return false;
+    }
 
-    const State &state             = context->getGLState();
-    const VertexArray *vao         = state.getVertexArray();
-    gl::Buffer *elementArrayBuffer = vao->getElementArrayBuffer().get();
+    const State &state         = context->getGLState();
+    const VertexArray *vao     = state.getVertexArray();
+    Buffer *elementArrayBuffer = vao->getElementArrayBuffer().get();
     if (!elementArrayBuffer)
     {
         context->handleError(InvalidOperation() << "zero is bound to ELEMENT_ARRAY_BUFFER");
@@ -428,7 +538,7 @@ bool ValidateDrawElementsIndirect(Context *context, GLenum mode, GLenum type, co
     if (!ValidateDrawIndirectBase(context, mode, indirect))
         return false;
 
-    gl::Buffer *drawIndirectBuffer = state.getDrawIndirectBuffer();
+    Buffer *drawIndirectBuffer = state.getTargetBuffer(BufferBinding::DrawIndirect);
     CheckedNumeric<size_t> checkedOffset(reinterpret_cast<size_t>(indirect));
     // In OpenGL ES3.1 spec, session 10.5, it defines the struct of DrawElementsIndirectCommand
     // which's size is 5 * sizeof(uint).
@@ -445,8 +555,335 @@ bool ValidateDrawElementsIndirect(Context *context, GLenum mode, GLenum type, co
     return true;
 }
 
+bool ValidateProgramUniform1i(Context *context, GLuint program, GLint location, GLint v0)
+{
+    return ValidateProgramUniform1iv(context, program, location, 1, &v0);
+}
+
+bool ValidateProgramUniform2i(Context *context, GLuint program, GLint location, GLint v0, GLint v1)
+{
+    GLint xy[2] = {v0, v1};
+    return ValidateProgramUniform2iv(context, program, location, 1, xy);
+}
+
+bool ValidateProgramUniform3i(Context *context,
+                              GLuint program,
+                              GLint location,
+                              GLint v0,
+                              GLint v1,
+                              GLint v2)
+{
+    GLint xyz[3] = {v0, v1, v2};
+    return ValidateProgramUniform3iv(context, program, location, 1, xyz);
+}
+
+bool ValidateProgramUniform4i(Context *context,
+                              GLuint program,
+                              GLint location,
+                              GLint v0,
+                              GLint v1,
+                              GLint v2,
+                              GLint v3)
+{
+    GLint xyzw[4] = {v0, v1, v2, v3};
+    return ValidateProgramUniform4iv(context, program, location, 1, xyzw);
+}
+
+bool ValidateProgramUniform1ui(Context *context, GLuint program, GLint location, GLuint v0)
+{
+    return ValidateProgramUniform1uiv(context, program, location, 1, &v0);
+}
+
+bool ValidateProgramUniform2ui(Context *context,
+                               GLuint program,
+                               GLint location,
+                               GLuint v0,
+                               GLuint v1)
+{
+    GLuint xy[2] = {v0, v1};
+    return ValidateProgramUniform2uiv(context, program, location, 1, xy);
+}
+
+bool ValidateProgramUniform3ui(Context *context,
+                               GLuint program,
+                               GLint location,
+                               GLuint v0,
+                               GLuint v1,
+                               GLuint v2)
+{
+    GLuint xyz[3] = {v0, v1, v2};
+    return ValidateProgramUniform3uiv(context, program, location, 1, xyz);
+}
+
+bool ValidateProgramUniform4ui(Context *context,
+                               GLuint program,
+                               GLint location,
+                               GLuint v0,
+                               GLuint v1,
+                               GLuint v2,
+                               GLuint v3)
+{
+    GLuint xyzw[4] = {v0, v1, v2, v3};
+    return ValidateProgramUniform4uiv(context, program, location, 1, xyzw);
+}
+
+bool ValidateProgramUniform1f(Context *context, GLuint program, GLint location, GLfloat v0)
+{
+    return ValidateProgramUniform1fv(context, program, location, 1, &v0);
+}
+
+bool ValidateProgramUniform2f(Context *context,
+                              GLuint program,
+                              GLint location,
+                              GLfloat v0,
+                              GLfloat v1)
+{
+    GLfloat xy[2] = {v0, v1};
+    return ValidateProgramUniform2fv(context, program, location, 1, xy);
+}
+
+bool ValidateProgramUniform3f(Context *context,
+                              GLuint program,
+                              GLint location,
+                              GLfloat v0,
+                              GLfloat v1,
+                              GLfloat v2)
+{
+    GLfloat xyz[3] = {v0, v1, v2};
+    return ValidateProgramUniform3fv(context, program, location, 1, xyz);
+}
+
+bool ValidateProgramUniform4f(Context *context,
+                              GLuint program,
+                              GLint location,
+                              GLfloat v0,
+                              GLfloat v1,
+                              GLfloat v2,
+                              GLfloat v3)
+{
+    GLfloat xyzw[4] = {v0, v1, v2, v3};
+    return ValidateProgramUniform4fv(context, program, location, 1, xyzw);
+}
+
+bool ValidateProgramUniform1iv(Context *context,
+                               GLuint program,
+                               GLint location,
+                               GLsizei count,
+                               const GLint *value)
+{
+    // Check for ES31 program uniform entry points
+    if (context->getClientVersion() < Version(3, 1))
+    {
+        ANGLE_VALIDATION_ERR(context, InvalidOperation(), ES31Required);
+        return false;
+    }
+
+    const LinkedUniform *uniform = nullptr;
+    Program *programObject       = GetValidProgram(context, program);
+    return ValidateUniformCommonBase(context, programObject, location, count, &uniform) &&
+           ValidateUniform1ivValue(context, uniform->type, count, value);
+}
+
+bool ValidateProgramUniform2iv(Context *context,
+                               GLuint program,
+                               GLint location,
+                               GLsizei count,
+                               const GLint *value)
+{
+    return ValidateProgramUniform(context, GL_INT_VEC2, program, location, count);
+}
+
+bool ValidateProgramUniform3iv(Context *context,
+                               GLuint program,
+                               GLint location,
+                               GLsizei count,
+                               const GLint *value)
+{
+    return ValidateProgramUniform(context, GL_INT_VEC3, program, location, count);
+}
+
+bool ValidateProgramUniform4iv(Context *context,
+                               GLuint program,
+                               GLint location,
+                               GLsizei count,
+                               const GLint *value)
+{
+    return ValidateProgramUniform(context, GL_INT_VEC4, program, location, count);
+}
+
+bool ValidateProgramUniform1uiv(Context *context,
+                                GLuint program,
+                                GLint location,
+                                GLsizei count,
+                                const GLuint *value)
+{
+    return ValidateProgramUniform(context, GL_UNSIGNED_INT, program, location, count);
+}
+
+bool ValidateProgramUniform2uiv(Context *context,
+                                GLuint program,
+                                GLint location,
+                                GLsizei count,
+                                const GLuint *value)
+{
+    return ValidateProgramUniform(context, GL_UNSIGNED_INT_VEC2, program, location, count);
+}
+
+bool ValidateProgramUniform3uiv(Context *context,
+                                GLuint program,
+                                GLint location,
+                                GLsizei count,
+                                const GLuint *value)
+{
+    return ValidateProgramUniform(context, GL_UNSIGNED_INT_VEC3, program, location, count);
+}
+
+bool ValidateProgramUniform4uiv(Context *context,
+                                GLuint program,
+                                GLint location,
+                                GLsizei count,
+                                const GLuint *value)
+{
+    return ValidateProgramUniform(context, GL_UNSIGNED_INT_VEC4, program, location, count);
+}
+
+bool ValidateProgramUniform1fv(Context *context,
+                               GLuint program,
+                               GLint location,
+                               GLsizei count,
+                               const GLfloat *value)
+{
+    return ValidateProgramUniform(context, GL_FLOAT, program, location, count);
+}
+
+bool ValidateProgramUniform2fv(Context *context,
+                               GLuint program,
+                               GLint location,
+                               GLsizei count,
+                               const GLfloat *value)
+{
+    return ValidateProgramUniform(context, GL_FLOAT_VEC2, program, location, count);
+}
+
+bool ValidateProgramUniform3fv(Context *context,
+                               GLuint program,
+                               GLint location,
+                               GLsizei count,
+                               const GLfloat *value)
+{
+    return ValidateProgramUniform(context, GL_FLOAT_VEC3, program, location, count);
+}
+
+bool ValidateProgramUniform4fv(Context *context,
+                               GLuint program,
+                               GLint location,
+                               GLsizei count,
+                               const GLfloat *value)
+{
+    return ValidateProgramUniform(context, GL_FLOAT_VEC4, program, location, count);
+}
+
+bool ValidateProgramUniformMatrix2fv(Context *context,
+                                     GLuint program,
+                                     GLint location,
+                                     GLsizei count,
+                                     GLboolean transpose,
+                                     const GLfloat *value)
+{
+    return ValidateProgramUniformMatrix(context, GL_FLOAT_MAT2, program, location, count,
+                                        transpose);
+}
+
+bool ValidateProgramUniformMatrix3fv(Context *context,
+                                     GLuint program,
+                                     GLint location,
+                                     GLsizei count,
+                                     GLboolean transpose,
+                                     const GLfloat *value)
+{
+    return ValidateProgramUniformMatrix(context, GL_FLOAT_MAT3, program, location, count,
+                                        transpose);
+}
+
+bool ValidateProgramUniformMatrix4fv(Context *context,
+                                     GLuint program,
+                                     GLint location,
+                                     GLsizei count,
+                                     GLboolean transpose,
+                                     const GLfloat *value)
+{
+    return ValidateProgramUniformMatrix(context, GL_FLOAT_MAT4, program, location, count,
+                                        transpose);
+}
+
+bool ValidateProgramUniformMatrix2x3fv(Context *context,
+                                       GLuint program,
+                                       GLint location,
+                                       GLsizei count,
+                                       GLboolean transpose,
+                                       const GLfloat *value)
+{
+    return ValidateProgramUniformMatrix(context, GL_FLOAT_MAT2x3, program, location, count,
+                                        transpose);
+}
+
+bool ValidateProgramUniformMatrix3x2fv(Context *context,
+                                       GLuint program,
+                                       GLint location,
+                                       GLsizei count,
+                                       GLboolean transpose,
+                                       const GLfloat *value)
+{
+    return ValidateProgramUniformMatrix(context, GL_FLOAT_MAT3x2, program, location, count,
+                                        transpose);
+}
+
+bool ValidateProgramUniformMatrix2x4fv(Context *context,
+                                       GLuint program,
+                                       GLint location,
+                                       GLsizei count,
+                                       GLboolean transpose,
+                                       const GLfloat *value)
+{
+    return ValidateProgramUniformMatrix(context, GL_FLOAT_MAT2x4, program, location, count,
+                                        transpose);
+}
+
+bool ValidateProgramUniformMatrix4x2fv(Context *context,
+                                       GLuint program,
+                                       GLint location,
+                                       GLsizei count,
+                                       GLboolean transpose,
+                                       const GLfloat *value)
+{
+    return ValidateProgramUniformMatrix(context, GL_FLOAT_MAT4x2, program, location, count,
+                                        transpose);
+}
+
+bool ValidateProgramUniformMatrix3x4fv(Context *context,
+                                       GLuint program,
+                                       GLint location,
+                                       GLsizei count,
+                                       GLboolean transpose,
+                                       const GLfloat *value)
+{
+    return ValidateProgramUniformMatrix(context, GL_FLOAT_MAT3x4, program, location, count,
+                                        transpose);
+}
+
+bool ValidateProgramUniformMatrix4x3fv(Context *context,
+                                       GLuint program,
+                                       GLint location,
+                                       GLsizei count,
+                                       GLboolean transpose,
+                                       const GLfloat *value)
+{
+    return ValidateProgramUniformMatrix(context, GL_FLOAT_MAT4x3, program, location, count,
+                                        transpose);
+}
+
 bool ValidateGetTexLevelParameterBase(Context *context,
-                                      GLenum target,
+                                      TextureTarget target,
                                       GLint level,
                                       GLenum pname,
                                       GLsizei *length)
@@ -462,20 +899,21 @@ bool ValidateGetTexLevelParameterBase(Context *context,
         *length = 0;
     }
 
-    if (!ValidTexLevelDestinationTarget(context, target))
+    TextureType type = TextureTargetToType(target);
+
+    if (!ValidTexLevelDestinationTarget(context, type))
     {
         ANGLE_VALIDATION_ERR(context, InvalidEnum(), InvalidTextureTarget);
         return false;
     }
 
-    if (context->getTargetTexture(IsCubeMapTextureTarget(target) ? GL_TEXTURE_CUBE_MAP : target) ==
-        nullptr)
+    if (context->getTargetTexture(type) == nullptr)
     {
         context->handleError(InvalidEnum() << "No texture bound.");
         return false;
     }
 
-    if (!ValidMipLevel(context, target, level))
+    if (!ValidMipLevel(context, type, level))
     {
         context->handleError(InvalidValue());
         return false;
@@ -520,7 +958,7 @@ bool ValidateGetTexLevelParameterBase(Context *context,
 }
 
 bool ValidateGetTexLevelParameterfv(Context *context,
-                                    GLenum target,
+                                    TextureTarget target,
                                     GLint level,
                                     GLenum pname,
                                     GLfloat *params)
@@ -528,8 +966,20 @@ bool ValidateGetTexLevelParameterfv(Context *context,
     return ValidateGetTexLevelParameterBase(context, target, level, pname, nullptr);
 }
 
+bool ValidateGetTexLevelParameterfvRobustANGLE(Context *context,
+                                               TextureTarget target,
+                                               GLint level,
+                                               GLenum pname,
+                                               GLsizei bufSize,
+                                               GLsizei *length,
+                                               GLfloat *params)
+{
+    UNIMPLEMENTED();
+    return false;
+}
+
 bool ValidateGetTexLevelParameteriv(Context *context,
-                                    GLenum target,
+                                    TextureTarget target,
                                     GLint level,
                                     GLenum pname,
                                     GLint *params)
@@ -537,8 +987,20 @@ bool ValidateGetTexLevelParameteriv(Context *context,
     return ValidateGetTexLevelParameterBase(context, target, level, pname, nullptr);
 }
 
-bool ValidateTexStorage2DMultiSample(Context *context,
-                                     GLenum target,
+bool ValidateGetTexLevelParameterivRobustANGLE(Context *context,
+                                               TextureTarget target,
+                                               GLint level,
+                                               GLenum pname,
+                                               GLsizei bufSize,
+                                               GLsizei *length,
+                                               GLint *params)
+{
+    UNIMPLEMENTED();
+    return false;
+}
+
+bool ValidateTexStorage2DMultisample(Context *context,
+                                     TextureType target,
                                      GLsizei samples,
                                      GLint internalFormat,
                                      GLsizei width,
@@ -551,7 +1013,7 @@ bool ValidateTexStorage2DMultiSample(Context *context,
         return false;
     }
 
-    if (target != GL_TEXTURE_2D_MULTISAMPLE)
+    if (target != TextureType::_2DMultisample)
     {
         context->handleError(InvalidEnum() << "Target must be TEXTURE_2D_MULTISAMPLE.");
         return false;
@@ -580,7 +1042,7 @@ bool ValidateTexStorage2DMultiSample(Context *context,
     }
 
     const TextureCaps &formatCaps = context->getTextureCaps().get(internalFormat);
-    if (!formatCaps.renderable)
+    if (!formatCaps.textureAttachment)
     {
         context->handleError(InvalidEnum() << "SizedInternalformat must be color-renderable, "
                                               "depth-renderable, or stencil-renderable.");
@@ -638,8 +1100,10 @@ bool ValidateGetMultisamplefv(Context *context, GLenum pname, GLuint index, GLfl
         return false;
     }
 
-    GLint maxSamples = context->getCaps().maxSamples;
-    if (index >= static_cast<GLuint>(maxSamples))
+    Framebuffer *framebuffer = context->getGLState().getDrawFramebuffer();
+    GLint samples            = framebuffer->getSamples(context);
+
+    if (index >= static_cast<GLuint>(samples))
     {
         context->handleError(InvalidValue() << "Index must be less than the value of SAMPLES.");
         return false;
@@ -648,7 +1112,18 @@ bool ValidateGetMultisamplefv(Context *context, GLenum pname, GLuint index, GLfl
     return true;
 }
 
-bool ValidationFramebufferParameteri(Context *context, GLenum target, GLenum pname, GLint param)
+bool ValidateGetMultisamplefvRobustANGLE(Context *context,
+                                         GLenum pname,
+                                         GLuint index,
+                                         GLsizei bufSize,
+                                         GLsizei *length,
+                                         GLfloat *val)
+{
+    UNIMPLEMENTED();
+    return false;
+}
+
+bool ValidateFramebufferParameteri(Context *context, GLenum target, GLenum pname, GLint param)
 {
     if (context->getClientVersion() < ES_3_1)
     {
@@ -656,7 +1131,7 @@ bool ValidationFramebufferParameteri(Context *context, GLenum target, GLenum pna
         return false;
     }
 
-    if (!ValidFramebufferTarget(target))
+    if (!ValidFramebufferTarget(context, target))
     {
         context->handleError(InvalidEnum() << "Invalid framebuffer target.");
         return false;
@@ -704,6 +1179,21 @@ bool ValidationFramebufferParameteri(Context *context, GLenum target, GLenum pna
         {
             break;
         }
+        case GL_FRAMEBUFFER_DEFAULT_LAYERS_EXT:
+        {
+            if (!context->getExtensions().geometryShader)
+            {
+                ANGLE_VALIDATION_ERR(context, InvalidEnum(), GeometryShaderExtensionNotEnabled);
+                return false;
+            }
+            GLint maxLayers = context->getCaps().maxFramebufferLayers;
+            if (param < 0 || param > maxLayers)
+            {
+                ANGLE_VALIDATION_ERR(context, InvalidValue(), InvalidFramebufferLayer);
+                return false;
+            }
+            break;
+        }
         default:
         {
             ANGLE_VALIDATION_ERR(context, InvalidEnum(), InvalidPname);
@@ -721,10 +1211,7 @@ bool ValidationFramebufferParameteri(Context *context, GLenum target, GLenum pna
     return true;
 }
 
-bool ValidationGetFramebufferParameteri(Context *context,
-                                        GLenum target,
-                                        GLenum pname,
-                                        GLint *params)
+bool ValidateGetFramebufferParameteriv(Context *context, GLenum target, GLenum pname, GLint *params)
 {
     if (context->getClientVersion() < ES_3_1)
     {
@@ -732,7 +1219,7 @@ bool ValidationGetFramebufferParameteri(Context *context,
         return false;
     }
 
-    if (!ValidFramebufferTarget(target))
+    if (!ValidFramebufferTarget(context, target))
     {
         ANGLE_VALIDATION_ERR(context, InvalidEnum(), InvalidFramebufferTarget);
         return false;
@@ -744,6 +1231,13 @@ bool ValidationGetFramebufferParameteri(Context *context,
         case GL_FRAMEBUFFER_DEFAULT_HEIGHT:
         case GL_FRAMEBUFFER_DEFAULT_SAMPLES:
         case GL_FRAMEBUFFER_DEFAULT_FIXED_SAMPLE_LOCATIONS:
+            break;
+        case GL_FRAMEBUFFER_DEFAULT_LAYERS_EXT:
+            if (!context->getExtensions().geometryShader)
+            {
+                ANGLE_VALIDATION_ERR(context, InvalidEnum(), GeometryShaderExtensionNotEnabled);
+                return false;
+            }
             break;
         default:
             ANGLE_VALIDATION_ERR(context, InvalidEnum(), InvalidPname);
@@ -759,6 +1253,17 @@ bool ValidationGetFramebufferParameteri(Context *context,
         return false;
     }
     return true;
+}
+
+bool ValidateGetFramebufferParameterivRobustANGLE(Context *context,
+                                                  GLenum target,
+                                                  GLenum pname,
+                                                  GLsizei bufSize,
+                                                  GLsizei *length,
+                                                  GLint *params)
+{
+    UNIMPLEMENTED();
+    return false;
 }
 
 bool ValidateGetProgramResourceIndex(Context *context,
@@ -788,7 +1293,7 @@ bool ValidateGetProgramResourceIndex(Context *context,
     return true;
 }
 
-bool ValidateBindVertexBuffer(ValidationContext *context,
+bool ValidateBindVertexBuffer(Context *context,
                               GLuint bindingIndex,
                               GLuint buffer,
                               GLintptr offset,
@@ -838,7 +1343,7 @@ bool ValidateBindVertexBuffer(ValidationContext *context,
     return true;
 }
 
-bool ValidateVertexBindingDivisor(ValidationContext *context, GLuint bindingIndex, GLuint divisor)
+bool ValidateVertexBindingDivisor(Context *context, GLuint bindingIndex, GLuint divisor)
 {
     if (context->getClientVersion() < ES_3_1)
     {
@@ -865,42 +1370,27 @@ bool ValidateVertexBindingDivisor(ValidationContext *context, GLuint bindingInde
     return true;
 }
 
-bool ValidateVertexAttribFormat(ValidationContext *context,
-                                GLuint attribIndex,
+bool ValidateVertexAttribFormat(Context *context,
+                                GLuint attribindex,
                                 GLint size,
                                 GLenum type,
-                                GLuint relativeOffset,
-                                GLboolean pureInteger)
+                                GLboolean normalized,
+                                GLuint relativeoffset)
 {
-    if (context->getClientVersion() < ES_3_1)
-    {
-        ANGLE_VALIDATION_ERR(context, InvalidOperation(), ES31Required);
-        return false;
-    }
-
-    const Caps &caps = context->getCaps();
-    if (relativeOffset > static_cast<GLuint>(caps.maxVertexAttribRelativeOffset))
-    {
-        context->handleError(
-            InvalidValue()
-            << "relativeOffset cannot be greater than MAX_VERTEX_ATTRIB_RELATIVE_OFFSET.");
-        return false;
-    }
-
-    // [OpenGL ES 3.1] Section 10.3.1 page 243:
-    // An INVALID_OPERATION error is generated if the default vertex array object is bound.
-    if (context->getGLState().getVertexArrayId() == 0)
-    {
-        context->handleError(InvalidOperation() << "Default vertex array object is bound.");
-        return false;
-    }
-
-    return ValidateVertexFormatBase(context, attribIndex, size, type, pureInteger);
+    return ValidateVertexAttribFormatCommon(context, attribindex, size, type, relativeoffset,
+                                            false);
 }
 
-bool ValidateVertexAttribBinding(ValidationContext *context,
-                                 GLuint attribIndex,
-                                 GLuint bindingIndex)
+bool ValidateVertexAttribIFormat(Context *context,
+                                 GLuint attribindex,
+                                 GLint size,
+                                 GLenum type,
+                                 GLuint relativeoffset)
+{
+    return ValidateVertexAttribFormatCommon(context, attribindex, size, type, relativeoffset, true);
+}
+
+bool ValidateVertexAttribBinding(Context *context, GLuint attribIndex, GLuint bindingIndex)
 {
     if (context->getClientVersion() < ES_3_1)
     {
@@ -989,18 +1479,9 @@ bool ValidateDispatchCompute(Context *context,
     const State &state = context->getGLState();
     Program *program   = state.getProgram();
 
-    if (program == nullptr)
+    if (program == nullptr || !program->hasLinkedShaderStage(ShaderType::Compute))
     {
-        context->handleError(InvalidOperation()
-                             << "No active program object for the compute shader stage.");
-        return false;
-    }
-
-    if (program->isLinked() == false || program->getAttachedComputeShader() == nullptr)
-    {
-        context->handleError(
-            InvalidOperation()
-            << "Program has not been successfully linked, or program contains no compute shaders.");
+        ANGLE_VALIDATION_ERR(context, InvalidOperation(), NoActiveProgramWithComputeShader);
         return false;
     }
 
@@ -1024,6 +1505,54 @@ bool ValidateDispatchCompute(Context *context,
         context->handleError(
             InvalidValue() << "num_groups_z cannot be greater than MAX_COMPUTE_WORK_GROUP_COUNT[2]="
                            << caps.maxComputeWorkGroupCount[2]);
+        return false;
+    }
+
+    return true;
+}
+
+bool ValidateDispatchComputeIndirect(Context *context, GLintptr indirect)
+{
+    if (context->getClientVersion() < ES_3_1)
+    {
+        ANGLE_VALIDATION_ERR(context, InvalidOperation(), ES31Required);
+        return false;
+    }
+
+    const State &state = context->getGLState();
+    Program *program   = state.getProgram();
+
+    if (program == nullptr || !program->hasLinkedShaderStage(ShaderType::Compute))
+    {
+        ANGLE_VALIDATION_ERR(context, InvalidOperation(), NoActiveProgramWithComputeShader);
+        return false;
+    }
+
+    if (indirect < 0)
+    {
+        ANGLE_VALIDATION_ERR(context, InvalidValue(), NegativeOffset);
+        return false;
+    }
+
+    if ((indirect & (sizeof(GLuint) - 1)) != 0)
+    {
+        ANGLE_VALIDATION_ERR(context, InvalidValue(), OffsetMustBeMultipleOfUint);
+        return false;
+    }
+
+    Buffer *dispatchIndirectBuffer = state.getTargetBuffer(BufferBinding::DispatchIndirect);
+    if (!dispatchIndirectBuffer)
+    {
+        ANGLE_VALIDATION_ERR(context, InvalidOperation(), DispatchIndirectBufferNotBound);
+        return false;
+    }
+
+    CheckedNumeric<GLuint64> checkedOffset(static_cast<GLuint64>(indirect));
+    auto checkedSum = checkedOffset + static_cast<GLuint64>(3 * sizeof(GLuint));
+    if (!checkedSum.IsValid() ||
+        checkedSum.ValueOrDie() > static_cast<GLuint64>(dispatchIndirectBuffer->getSize()))
+    {
+        ANGLE_VALIDATION_ERR(context, InvalidOperation(), InsufficientBufferSize);
         return false;
     }
 
@@ -1153,7 +1682,7 @@ bool ValidateGetProgramResourceiv(Context *context,
 {
     if (context->getClientVersion() < ES_3_1)
     {
-        context->handleError(InvalidOperation() << "Context does not support GLES3.1.");
+        ANGLE_VALIDATION_ERR(context, InvalidOperation(), ES31Required);
         return false;
     }
 
@@ -1184,7 +1713,7 @@ bool ValidateGetProgramResourceiv(Context *context,
     }
     for (GLsizei i = 0; i < propCount; i++)
     {
-        if (!ValidateProgramResourceProperty(props[i]))
+        if (!ValidateProgramResourceProperty(context, props[i]))
         {
             context->handleError(InvalidEnum() << "Invalid prop.");
             return false;
@@ -1195,6 +1724,291 @@ bool ValidateGetProgramResourceiv(Context *context,
             return false;
         }
     }
+    return true;
+}
+
+bool ValidateGetProgramInterfaceiv(Context *context,
+                                   GLuint program,
+                                   GLenum programInterface,
+                                   GLenum pname,
+                                   GLint *params)
+{
+    if (context->getClientVersion() < ES_3_1)
+    {
+        ANGLE_VALIDATION_ERR(context, InvalidOperation(), ES31Required);
+        return false;
+    }
+
+    Program *programObject = GetValidProgram(context, program);
+    if (programObject == nullptr)
+    {
+        return false;
+    }
+
+    if (!ValidateProgramInterface(programInterface))
+    {
+        context->handleError(InvalidEnum() << "Invalid program interface.");
+        return false;
+    }
+
+    switch (pname)
+    {
+        case GL_ACTIVE_RESOURCES:
+        case GL_MAX_NAME_LENGTH:
+        case GL_MAX_NUM_ACTIVE_VARIABLES:
+            break;
+
+        default:
+            context->handleError(InvalidEnum() << "Unknown property of program interface.");
+            return false;
+    }
+
+    if (pname == GL_MAX_NAME_LENGTH && programInterface == GL_ATOMIC_COUNTER_BUFFER)
+    {
+        context->handleError(InvalidOperation()
+                             << "Active atomic counter resources are not assigned name strings.");
+        return false;
+    }
+
+    if (pname == GL_MAX_NUM_ACTIVE_VARIABLES)
+    {
+        switch (programInterface)
+        {
+            case GL_ATOMIC_COUNTER_BUFFER:
+            case GL_SHADER_STORAGE_BLOCK:
+            case GL_UNIFORM_BLOCK:
+                break;
+
+            default:
+                context->handleError(
+                    InvalidOperation()
+                    << "MAX_NUM_ACTIVE_VARIABLES requires a buffer or block interface.");
+                return false;
+        }
+    }
+
+    return true;
+}
+
+bool ValidateGetProgramInterfaceivRobustANGLE(Context *context,
+                                              GLuint program,
+                                              GLenum programInterface,
+                                              GLenum pname,
+                                              GLsizei bufSize,
+                                              GLsizei *length,
+                                              GLint *params)
+{
+    UNIMPLEMENTED();
+    return false;
+}
+
+static bool ValidateGenOrDeleteES31(Context *context, GLint n)
+{
+    if (context->getClientVersion() < ES_3_1)
+    {
+        ANGLE_VALIDATION_ERR(context, InvalidOperation(), ES31Required);
+        return false;
+    }
+
+    return ValidateGenOrDelete(context, n);
+}
+
+bool ValidateGenProgramPipelines(Context *context, GLint n, GLuint *)
+{
+    return ValidateGenOrDeleteES31(context, n);
+}
+
+bool ValidateDeleteProgramPipelines(Context *context, GLint n, const GLuint *)
+{
+    return ValidateGenOrDeleteES31(context, n);
+}
+
+bool ValidateBindProgramPipeline(Context *context, GLuint pipeline)
+{
+    if (context->getClientVersion() < ES_3_1)
+    {
+        ANGLE_VALIDATION_ERR(context, InvalidOperation(), ES31Required);
+        return false;
+    }
+
+    if (!context->isProgramPipelineGenerated(pipeline))
+    {
+        ANGLE_VALIDATION_ERR(context, InvalidOperation(), ObjectNotGenerated);
+        return false;
+    }
+
+    return true;
+}
+
+bool ValidateIsProgramPipeline(Context *context, GLuint pipeline)
+{
+    if (context->getClientVersion() < ES_3_1)
+    {
+        ANGLE_VALIDATION_ERR(context, InvalidOperation(), ES31Required);
+        return false;
+    }
+
+    return true;
+}
+
+bool ValidateUseProgramStages(Context *context, GLuint pipeline, GLbitfield stages, GLuint program)
+{
+    UNIMPLEMENTED();
+    return false;
+}
+
+bool ValidateActiveShaderProgram(Context *context, GLuint pipeline, GLuint program)
+{
+    UNIMPLEMENTED();
+    return false;
+}
+
+bool ValidateCreateShaderProgramv(Context *context,
+                                  ShaderType type,
+                                  GLsizei count,
+                                  const GLchar *const *strings)
+{
+    UNIMPLEMENTED();
+    return false;
+}
+
+bool ValidateGetProgramPipelineiv(Context *context, GLuint pipeline, GLenum pname, GLint *params)
+{
+    UNIMPLEMENTED();
+    return false;
+}
+
+bool ValidateValidateProgramPipeline(Context *context, GLuint pipeline)
+{
+    UNIMPLEMENTED();
+    return false;
+}
+
+bool ValidateGetProgramPipelineInfoLog(Context *context,
+                                       GLuint pipeline,
+                                       GLsizei bufSize,
+                                       GLsizei *length,
+                                       GLchar *infoLog)
+{
+    UNIMPLEMENTED();
+    return false;
+}
+
+bool ValidateMemoryBarrier(Context *context, GLbitfield barriers)
+{
+    if (context->getClientVersion() < ES_3_1)
+    {
+        ANGLE_VALIDATION_ERR(context, InvalidOperation(), ES31Required);
+        return false;
+    }
+
+    if (barriers == GL_ALL_BARRIER_BITS)
+    {
+        return true;
+    }
+
+    GLbitfield supported_barrier_bits =
+        GL_VERTEX_ATTRIB_ARRAY_BARRIER_BIT | GL_ELEMENT_ARRAY_BARRIER_BIT | GL_UNIFORM_BARRIER_BIT |
+        GL_TEXTURE_FETCH_BARRIER_BIT | GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_COMMAND_BARRIER_BIT |
+        GL_PIXEL_BUFFER_BARRIER_BIT | GL_TEXTURE_UPDATE_BARRIER_BIT | GL_BUFFER_UPDATE_BARRIER_BIT |
+        GL_FRAMEBUFFER_BARRIER_BIT | GL_TRANSFORM_FEEDBACK_BARRIER_BIT |
+        GL_ATOMIC_COUNTER_BARRIER_BIT | GL_SHADER_STORAGE_BARRIER_BIT;
+    if ((barriers & ~supported_barrier_bits) != 0)
+    {
+        ANGLE_VALIDATION_ERR(context, InvalidValue(), InvalidMemoryBarrierBit);
+        return false;
+    }
+
+    return true;
+}
+
+bool ValidateMemoryBarrierByRegion(Context *context, GLbitfield barriers)
+{
+    if (context->getClientVersion() < ES_3_1)
+    {
+        ANGLE_VALIDATION_ERR(context, InvalidOperation(), ES31Required);
+        return false;
+    }
+
+    if (barriers == GL_ALL_BARRIER_BITS)
+    {
+        return true;
+    }
+
+    GLbitfield supported_barrier_bits = GL_ATOMIC_COUNTER_BARRIER_BIT | GL_FRAMEBUFFER_BARRIER_BIT |
+                                        GL_SHADER_IMAGE_ACCESS_BARRIER_BIT |
+                                        GL_SHADER_STORAGE_BARRIER_BIT |
+                                        GL_TEXTURE_FETCH_BARRIER_BIT | GL_UNIFORM_BARRIER_BIT;
+    if ((barriers & ~supported_barrier_bits) != 0)
+    {
+        ANGLE_VALIDATION_ERR(context, InvalidValue(), InvalidMemoryBarrierBit);
+        return false;
+    }
+
+    return true;
+}
+
+bool ValidateSampleMaski(Context *context, GLuint maskNumber, GLbitfield mask)
+{
+    if (context->getClientVersion() < ES_3_1)
+    {
+        ANGLE_VALIDATION_ERR(context, InvalidOperation(), ES31Required);
+        return false;
+    }
+
+    if (maskNumber >= context->getCaps().maxSampleMaskWords)
+    {
+        ANGLE_VALIDATION_ERR(context, InvalidValue(), InvalidSampleMaskNumber);
+        return false;
+    }
+
+    return true;
+}
+
+bool ValidateFramebufferTextureEXT(Context *context,
+                                   GLenum target,
+                                   GLenum attachment,
+                                   GLuint texture,
+                                   GLint level)
+{
+    if (!context->getExtensions().geometryShader)
+    {
+        ANGLE_VALIDATION_ERR(context, InvalidOperation(), GeometryShaderExtensionNotEnabled);
+        return false;
+    }
+
+    if (texture != 0)
+    {
+        gl::Texture *tex = context->getTexture(texture);
+
+        // [EXT_geometry_shader] Section 9.2.8 "Attaching Texture Images to a Framebuffer"
+        // An INVALID_VALUE error is generated if <texture> is not the name of a texture object.
+        // We put this validation before ValidateFramebufferTextureBase because it is an
+        // INVALID_OPERATION error for both FramebufferTexture2D and FramebufferTextureLayer:
+        // [OpenGL ES 3.1] Chapter 9.2.8 (FramebufferTexture2D)
+        // An INVALID_OPERATION error is generated if texture is not zero, and does not name an
+        // existing texture object of type matching textarget.
+        // [OpenGL ES 3.1 Chapter 9.2.8 (FramebufferTextureLayer)
+        // An INVALID_OPERATION error is generated if texture is non-zero and is not the name of a
+        // three-dimensional or two-dimensional array texture.
+        if (tex == nullptr)
+        {
+            ANGLE_VALIDATION_ERR(context, InvalidValue(), InvalidTextureName);
+            return false;
+        }
+
+        if (!ValidMipLevel(context, tex->getType(), level))
+        {
+            ANGLE_VALIDATION_ERR(context, InvalidValue(), InvalidMipLevel);
+            return false;
+        }
+    }
+
+    if (!ValidateFramebufferTextureBase(context, target, attachment, texture, level))
+    {
+        return false;
+    }
+
     return true;
 }
 

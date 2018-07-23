@@ -21,7 +21,7 @@ class RenderTargetD3D : public FramebufferAttachmentRenderTarget
 {
   public:
     RenderTargetD3D();
-    virtual ~RenderTargetD3D();
+    ~RenderTargetD3D() override;
 
     virtual GLsizei getWidth() const = 0;
     virtual GLsizei getHeight() const = 0;
@@ -33,9 +33,6 @@ class RenderTargetD3D : public FramebufferAttachmentRenderTarget
 
     virtual unsigned int getSerial() const;
     static unsigned int issueSerials(unsigned int count);
-
-    // Only currently applies to D3D11.
-    virtual void signalDirty() {}
 
   private:
     const unsigned int mSerial;
